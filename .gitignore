@@ -1,0 +1,17 @@
+# Dependências
+node_modules/
+**/node_modules/
+
+# Builds
+dist/
+build/
+
+# Variáveis de ambiente e Banco local
+.env
+.env.*
+*.sqlite
+*.db
+
+# Logs e Sistema
+npm-debug.log*
+.DS_Store
