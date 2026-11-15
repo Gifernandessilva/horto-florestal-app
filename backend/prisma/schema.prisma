@@ -1,0 +1,87 @@
+// cspell:disable
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Congregation {
+  id          String       @id @default(uuid())
+  name        String
+  city        String       @default("Rio Branco - AC")
+  inviteCode  String       @unique
+  members     Member[]
+  territories Territory[]
+  createdAt   DateTime     @default(now())
+}
+
+model Member {
+  id             String          @id @default(uuid())
+  name           String
+  phone          String          @unique
+  pin            String
+  role           String          @default("PUBLICADOR")
+  monthlyGoal    Int             @default(0)
+  serviceGroup   String          @default("Grupo 1")
+  congregationId String
+  congregation   Congregation    @relation(fields: [congregationId], references: [id])
+  timeLogs       TimeLog[]
+  assignments    Assignment[]
+  monthlyReports MonthlyReport[]
+  createdAt      DateTime        @default(now())
+}
+
+model TimeLog {
+  id          String   @id @default(uuid())
+  memberId    String
+  member      Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  date        String
+  durationSec Int
+  revisitas   Int      @default(0)
+  estudos     Int      @default(0)
+  syncedAt    DateTime @default(now())
+
+  @@index([memberId])
+}
+
+model MonthlyReport {
+  id           String   @id @default(uuid())
+  memberId     String
+  member       Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  monthYear    String
+  participated Boolean  @default(true)
+  totalHours   Float    @default(0)
+  returnVisits Int      @default(0)
+  bibleStudies Int      @default(0)
+  notes        String?
+  submittedAt  DateTime @default(now())
+
+  @@unique([memberId, monthYear])
+}
+
+model Assignment {
+  id       String @id @default(uuid())
+  cargo    String
+  data     String
+  local    String @default("Salão Principal")
+  status   String @default("pendente")
+  memberId String
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
+}
+
+model Territory {
+  id             String       @id
+  nome           String
+  quadras        Int
+  status         String       @default("Disponível")
+  responsavel    String       @default("Livre")
+  lat            Float
+  lng            Float
+  congregationId String
+  congregation   Congregation @relation(fields: [congregationId], references: [id])
+}
