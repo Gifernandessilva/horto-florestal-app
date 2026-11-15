@@ -14,6 +14,30 @@ interface TimeSession {
   synced?: boolean;
 }
 
+interface MonthlyReportItem {
+  id: string;
+  memberId: string;
+  monthYear: string;
+  totalHours: number;
+  revisitas: number;
+  estudos: number;
+  observacoes?: string;
+  status: string;
+}
+
+interface AssignmentItem {
+  id: string;
+  cargo: string;
+  data: string;
+  local: string;
+  status: string;
+  memberId: string;
+  member?: {
+    id: string;
+    name: string;
+  };
+}
+
 interface MemberProfile {
   id: string;
   name: string;
@@ -23,6 +47,7 @@ interface MemberProfile {
   monthlyGoal: number;
   serviceGroup: string;
   timeLogs?: TimeSession[];
+  monthlyReports?: MonthlyReportItem[];
 }
 
 interface TerritoryItem {
@@ -36,6 +61,7 @@ interface TerritoryItem {
 }
 
 const API_URL = 'http://localhost:3000/api';
+const MES_ATUAL = '2026-11';
 
 function lerCronometroDoUtilizador(userId: string) {
   const savedTimer = localStorage.getItem(`@horto:timer_${userId}`);
@@ -54,7 +80,6 @@ function lerCronometroDoUtilizador(userId: string) {
   return { running: false, seconds: 0 };
 }
 
-// Componente do Mapa Interativo Real (Leaflet)
 function TerritoryMap({
   territorios,
   focoCoords,
@@ -68,7 +93,6 @@ function TerritoryMap({
   const mapInstanceRef = useRef<L.Map | null>(null);
   const layersRef = useRef<L.LayerGroup | null>(null);
 
-  // Inicializa o mapa centrado no Horto Florestal (Rio Branco - AC)
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
@@ -92,7 +116,6 @@ function TerritoryMap({
     };
   }, []);
 
-  // Desenha as quadras (polígonos) e marcadores sempre que os territórios atualizam no PostgreSQL
   useEffect(() => {
     const map = mapInstanceRef.current;
     const layerGroup = layersRef.current;
@@ -102,9 +125,8 @@ function TerritoryMap({
 
     territorios.forEach((t) => {
       const isDisponivel = t.status === 'Disponível';
-      const cor = isDisponivel ? '#22c55e' : '#eab308'; // Verde = Disponível, Amarelo = Em andamento
+      const cor = isDisponivel ? '#22c55e' : '#eab308';
 
-      // Desenha um polígono representando a área das quadras ao redor da coordenada do território
       const deltaLat = 0.0014;
       const deltaLng = 0.0018;
       const bounds: L.LatLngTuple[] = [
@@ -121,7 +143,6 @@ function TerritoryMap({
         fillOpacity: 0.28,
       }).addTo(layerGroup);
 
-      // Etiqueta central com o código do Território (ex: T-01, T-02)
       const badgeIcon = L.divIcon({
         className: 'custom-territory-pin',
         html: `<div style="
@@ -161,7 +182,6 @@ function TerritoryMap({
     });
   }, [territorios, onSelectTerritory]);
 
-  // Move a câmera suavemente quando o usuário clica em "Focar no Mapa" ou "Centralizar no Horto"
   useEffect(() => {
     if (mapInstanceRef.current && focoCoords) {
       mapInstanceRef.current.flyTo(focoCoords, 16, { duration: 0.8 });
@@ -190,16 +210,17 @@ export default function App() {
   const [members, setMembers] = useState<MemberProfile[]>([]);
   const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
   const [territorios, setTerritorios] = useState<TerritoryItem[]>([]);
+  const [escalas, setEscalas] = useState<AssignmentItem[]>([]);
 
   const [activeTab, setActiveTab] = useState<Tab>('inicio');
   const [darkMode, setDarkMode] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [loadingDb, setLoadingDb] = useState(true);
 
-  // Estados do Mapa GPS
   const [focoMapa, setFocoMapa] = useState<[number, number] | null>(null);
   const [territorioDestacado, setTerritorioDestacado] = useState<string | null>(null);
 
+  // Estados de novo membro
   const [showNewMemberForm, setShowNewMemberForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
@@ -207,6 +228,17 @@ export default function App() {
   const [newGoal, setNewGoal] = useState(0);
   const [newGroup, setNewGroup] = useState('Grupo 1 - Horto');
 
+  // Estados para criar nova Escala (Assignment) no banco
+  const [showNewAssignmentForm, setShowNewAssignmentForm] = useState(false);
+  const [novoCargo, setNovoCargo] = useState('');
+  const [novaDataEscala, setNovaDataEscala] = useState('');
+  const [novoLocalEscala, setNovoLocalEscala] = useState('Salão Principal');
+  const [membroDesignadoId, setMembroDesignadoId] = useState('');
+
+  // Estados do Relatório Mensal (MonthlyReport)
+  const [observacoesRelatorio, setObservacoesRelatorio] = useState('');
+
+  // Estados do Cronômetro
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [revisitas, setRevisitas] = useState(2);
@@ -215,13 +247,6 @@ export default function App() {
   const [sessions, setSessions] = useState<TimeSession[]>(() => {
     return JSON.parse(localStorage.getItem('@horto:offline_queue') || '[]');
   });
-
-  const [escalas, setEscalas] = useState([
-    { id: 1, cargo: 'Indicador de Entrada', data: 'Domingo, 15 Nov • 10:00', responsavel: 'Taylyson', status: 'pendente' },
-    { id: 2, cargo: 'Operador de Áudio e Vídeo', data: 'Quinta, 19 Nov • 19:30', responsavel: 'Wdeyverson', status: 'confirmado' },
-    { id: 3, cargo: 'Microfone Volante', data: 'Domingo, 22 Nov • 10:00', responsavel: 'Taylyson', status: 'pendente' },
-    { id: 4, cargo: 'Leitor do Estudo', data: 'Domingo, 22 Nov • 10:40', responsavel: 'Marcos Silva', status: 'confirmado' },
-  ]);
 
   const aplicarUtilizador = useCallback((u: MemberProfile | null) => {
     setCurrentUser(u);
@@ -238,17 +263,24 @@ export default function App() {
 
   const carregarDadosDoBanco = useCallback(async () => {
     try {
-      const [resMembers, resTerritories] = await Promise.all([
+      const [resMembers, resTerritories, resAssignments] = await Promise.all([
         fetch(`${API_URL}/members`),
         fetch(`${API_URL}/territories`),
+        fetch(`${API_URL}/assignments`),
       ]);
 
-      if (resMembers.ok && resTerritories.ok) {
+      if (resMembers.ok && resTerritories.ok && resAssignments.ok) {
         const listaMembros: MemberProfile[] = await resMembers.json();
         const listaTerritorios: TerritoryItem[] = await resTerritories.json();
+        const listaEscalas: AssignmentItem[] = await resAssignments.json();
 
         setMembers(listaMembros);
         setTerritorios(listaTerritorios);
+        setEscalas(listaEscalas);
+
+        if (listaMembros.length > 0 && !membroDesignadoId) {
+          setMembroDesignadoId(listaMembros[0].id);
+        }
 
         const savedUserId = localStorage.getItem('@horto:current_user_id');
         const encontrado =
@@ -265,7 +297,7 @@ export default function App() {
     } finally {
       setLoadingDb(false);
     }
-  }, [aplicarUtilizador]);
+  }, [aplicarUtilizador, membroDesignadoId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -288,7 +320,6 @@ export default function App() {
     };
   }, [carregarDadosDoBanco]);
 
-  // Motor do Cronómetro Persistente
   useEffect(() => {
     if (!currentUser) return;
     const storageKey = `@horto:timer_${currentUser.id}`;
@@ -391,6 +422,75 @@ export default function App() {
     }
   };
 
+  // Confirmar escala direto no PostgreSQL
+  const confirmarEscalaNoBanco = async (escalaId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/assignments/${escalaId}/confirm`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        await carregarDadosDoBanco();
+      }
+    } catch {
+      alert('Erro ao confirmar presença na escala.');
+    }
+  };
+
+  // Criar nova escala no PostgreSQL
+  const criarNovaEscalaNoBanco = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!novoCargo.trim() || !novaDataEscala.trim() || !membroDesignadoId) return;
+
+    try {
+      const res = await fetch(`${API_URL}/assignments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cargo: novoCargo,
+          data: novaDataEscala,
+          local: novoLocalEscala,
+          memberId: membroDesignadoId,
+        }),
+      });
+
+      if (res.ok) {
+        setNovoCargo('');
+        setNovaDataEscala('');
+        setShowNewAssignmentForm(false);
+        await carregarDadosDoBanco();
+        alert('📅 Nova designação gravada no PostgreSQL!');
+      }
+    } catch {
+      alert('Erro ao criar nova escala.');
+    }
+  };
+
+  // Enviar Relatório Mensal Oficial para a tabela MonthlyReport do PostgreSQL
+  const enviarRelatorioMensalNoBanco = async (horasTotais: number) => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch(`${API_URL}/reports/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberId: currentUser.id,
+          monthYear: MES_ATUAL,
+          totalHours: horasTotais,
+          revisitas,
+          estudos,
+          observacoes: observacoesRelatorio,
+        }),
+      });
+
+      if (res.ok) {
+        await carregarDadosDoBanco();
+        alert(`📊 Relatório de Novembro/2026 de ${currentUser.name} enviado ao Secretário e salvo no PostgreSQL!`);
+      }
+    } catch {
+      alert('Sem conexão para enviar o relatório no momento.');
+    }
+  };
+
   const localizarMeuGps = () => {
     if (!navigator.geolocation) {
       alert('GPS não suportado neste navegador.');
@@ -401,7 +501,6 @@ export default function App() {
         setFocoMapa([pos.coords.latitude, pos.coords.longitude]);
       },
       () => {
-        // Caso o navegador no PC bloqueie o GPS, centraliza no Parque do Horto Florestal
         setFocoMapa([-9.9482, -67.8285]);
       }
     );
@@ -568,6 +667,9 @@ export default function App() {
   const metaMensal = currentUser.monthlyGoal || 50;
   const progressoPercentual = Math.min(Math.round((horasSalvas / metaMensal) * 100), 100);
 
+  const meuRelatorioMes = (currentUser.monthlyReports || []).find((r) => r.monthYear === MES_ATUAL);
+  const minhaProximaEscala = escalas.find((e) => e.memberId === currentUser.id) || escalas[0];
+
   return (
     <div className={darkMode ? 'bg-[#121A13] text-[#EAECE9] min-h-screen' : 'bg-[#2C3A2B] text-white min-h-screen'}>
       <div className="max-w-md mx-auto p-5 flex flex-col justify-between min-h-screen font-sans">
@@ -621,8 +723,10 @@ export default function App() {
                 className={`rounded-2xl p-3.5 mb-4 border cursor-pointer flex justify-between items-center ${cardStyle}`}
               >
                 <div>
-                  <span className="text-[11px] uppercase tracking-wider opacity-75 block">Escala da Congregação:</span>
-                  <strong className="text-sm">Indicador de Entrada • Domingo, 10h</strong>
+                  <span className="text-[11px] uppercase tracking-wider opacity-75 block">Próxima Escala no Banco:</span>
+                  <strong className="text-sm">
+                    {minhaProximaEscala ? `${minhaProximaEscala.cargo} • ${minhaProximaEscala.data}` : 'Ver Escalas da Congregação'}
+                  </strong>
                 </div>
                 <span className="text-xs bg-[#466044] text-white px-2.5 py-1 rounded-lg font-semibold">Escalas →</span>
               </div>
@@ -679,33 +783,110 @@ export default function App() {
             </div>
           )}
 
+          {/* ABA 2: ESCALAS REAIS NO POSTGRESQL */}
           {activeTab === 'escalas' && (
             <div className="space-y-3">
-              <h2 className="text-xs uppercase tracking-widest text-[#8FA38B] font-bold">
-                Quadro Geral de Designações
-              </h2>
+              <div className="flex justify-between items-center">
+                <h2 className="text-xs uppercase tracking-widest text-[#8FA38B] font-bold">
+                  Escalas no Banco de Dados ({escalas.length})
+                </h2>
+                <button
+                  onClick={() => setShowNewAssignmentForm(!showNewAssignmentForm)}
+                  className="text-[11px] bg-[#466044] hover:bg-[#537150] text-white px-2.5 py-1 rounded-lg font-bold cursor-pointer"
+                >
+                  {showNewAssignmentForm ? '✕ Fechar' : '+ Nova Escala'}
+                </button>
+              </div>
+
+              {showNewAssignmentForm && (
+                <form onSubmit={criarNovaEscalaNoBanco} className={`rounded-2xl p-4 border space-y-2.5 text-xs ${cardStyle}`}>
+                  <h3 className="font-bold text-sm text-emerald-400">Nova Designação da Congregação</h3>
+                  <div>
+                    <label className="block mb-1 opacity-80">Cargo / Função:</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Indicador de Auditório"
+                      value={novoCargo}
+                      onChange={(e) => setNovoCargo(e.target.value)}
+                      className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block mb-1 opacity-80">Dia e Horário:</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: Quinta, 26 Nov • 19:30"
+                        value={novaDataEscala}
+                        onChange={(e) => setNovaDataEscala(e.target.value)}
+                        className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-1 opacity-80">Local:</label>
+                      <input
+                        type="text"
+                        value={novoLocalEscala}
+                        onChange={(e) => setNovoLocalEscala(e.target.value)}
+                        className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block mb-1 opacity-80">Membro Designado:</label>
+                    <select
+                      value={membroDesignadoId}
+                      onChange={(e) => setMembroDesignadoId(e.target.value)}
+                      className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                    >
+                      {members.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.serviceGroup})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 rounded-lg font-bold bg-emerald-700 hover:bg-emerald-600 text-white cursor-pointer"
+                  >
+                    💾 Salvar Escala no PostgreSQL
+                  </button>
+                </form>
+              )}
+
               {escalas.map((item) => {
-                const isMine = item.responsavel === currentUser.name;
+                const nomeResponsavel = item.member?.name || 'Membro';
+                const isMine = item.memberId === currentUser.id;
+                const isConfirmado = item.status === 'confirmado';
                 return (
                   <div key={item.id} className={`rounded-2xl p-4 border ${cardStyle} ${isMine ? 'ring-2 ring-[#648C61]' : ''}`}>
                     <div className="flex justify-between items-start">
                       <div>
                         <h3 className="font-bold text-base">{item.cargo}</h3>
-                        <p className="text-xs opacity-80">{item.data}</p>
+                        <p className="text-xs opacity-80">{item.data} • {item.local}</p>
                         <p className="text-xs font-semibold text-[#8FA38B] mt-1">
-                          Designado: {item.responsavel} {isMine && '(Você)'}
+                          Designado: <strong className="text-white">{nomeResponsavel}</strong> {isMine && '(Você)'}
                         </p>
                       </div>
-                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[#253526] text-[#A5B8A3]">
+                      <span
+                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          isConfirmado
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                            : 'bg-yellow-950 text-yellow-300 border border-yellow-700'
+                        }`}
+                      >
                         {item.status}
                       </span>
                     </div>
-                    {isMine && (
+                    {isMine && !isConfirmado && (
                       <button
-                        onClick={() => setEscalas(escalas.map((e) => (e.id === item.id ? { ...e, status: 'confirmado' } : e)))}
-                        className="mt-3 w-full py-2 rounded-lg text-xs font-bold bg-[#466044] text-white cursor-pointer"
+                        onClick={() => confirmarEscalaNoBanco(item.id)}
+                        className="mt-3 w-full py-2 rounded-lg text-xs font-bold bg-[#466044] hover:bg-[#537150] text-white cursor-pointer"
                       >
-                        ✓ Confirmar Minha Presença
+                        ✓ Confirmar Minha Presença no BD
                       </button>
                     )}
                   </div>
@@ -714,7 +895,7 @@ export default function App() {
             </div>
           )}
 
-          {/* ABA 3: MAPA GPS REAL + TERRITÓRIOS NO POSTGRESQL */}
+          {/* ABA 3: MAPA GPS REAL + TERRITÓRIOS */}
           {activeTab === 'territorios' && (
             <div className="space-y-3">
               <div className="flex justify-between items-center">
@@ -729,14 +910,12 @@ export default function App() {
                 </button>
               </div>
 
-              {/* MAPA LEAFLET INTERATIVO */}
               <TerritoryMap
                 territorios={territorios}
                 focoCoords={focoMapa}
                 onSelectTerritory={(id) => setTerritorioDestacado(id)}
               />
 
-              {/* LISTA DE QUADRAS SINCRONIZADAS COM O MAPA */}
               {territorios.map((t) => {
                 const isDisponivel = t.status === 'Disponível';
                 const isDestacado = territorioDestacado === t.id;
@@ -806,11 +985,24 @@ export default function App() {
             </div>
           )}
 
+          {/* ABA 4: FECHAMENTO MENSAL (MONTHLY REPORT) + PAINEL DO SECRETÁRIO */}
           {activeTab === 'relatorios' && (
             <div>
-              <h2 className="text-xs uppercase tracking-widest text-[#8FA38B] font-bold mb-3">
-                Relatório Mensal • {currentUser.name}
-              </h2>
+              <div className="flex justify-between items-center mb-3">
+                <h2 className="text-xs uppercase tracking-widest text-[#8FA38B] font-bold">
+                  Relatório Novembro/2026 • {currentUser.name}
+                </h2>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    meuRelatorioMes
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                      : 'bg-yellow-950 text-yellow-300 border border-yellow-700'
+                  }`}
+                >
+                  {meuRelatorioMes ? '✅ Entregue no BD' : '⏳ Pendente de envio'}
+                </span>
+              </div>
+
               <div className={`rounded-2xl p-4 border mb-4 ${cardStyle}`}>
                 <div className="grid grid-cols-3 gap-2 text-center mb-3">
                   <div className="p-2 rounded-xl bg-[#121A13]/40">
@@ -826,28 +1018,55 @@ export default function App() {
                     <strong className="text-lg">{estudos}</strong>
                   </div>
                 </div>
+
+                <input
+                  type="text"
+                  placeholder="Observações para o Secretário (opcional)..."
+                  value={observacoesRelatorio}
+                  onChange={(e) => setObservacoesRelatorio(e.target.value)}
+                  className="w-full p-2.5 mb-2.5 rounded-xl bg-[#121A13] border border-[#3A523D] text-xs text-white"
+                />
+
+                <button
+                  onClick={() => enviarRelatorioMensalNoBanco(horasSalvas)}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold uppercase bg-[#466044] hover:bg-[#537150] text-white cursor-pointer"
+                >
+                  {meuRelatorioMes
+                    ? '🔄 Atualizar Relatório de Novembro no Banco'
+                    : '📤 Enviar Relatório de Novembro ao Secretário'}
+                </button>
               </div>
 
-              {currentUser.role === 'ADMIN' && (
-                <div className={`rounded-2xl p-4 border mb-4 border-emerald-700/60 ${cardStyle}`}>
-                  <h3 className="text-xs font-extrabold uppercase text-emerald-400 mb-2">
-                    🛡️ Painel do Secretário • Membros no PostgreSQL ({members.length})
-                  </h3>
-                  <div className="space-y-2 text-xs">
-                    {members.map((m) => (
-                      <div key={m.id} className="flex justify-between items-center p-2 rounded-lg bg-[#121A13]/40">
+              {/* PAINEL DO SECRETÁRIO / ADMIN */}
+              <div className={`rounded-2xl p-4 border mb-4 border-emerald-700/60 ${cardStyle}`}>
+                <h3 className="text-xs font-extrabold uppercase text-emerald-400 mb-2">
+                  🛡️ Painel do Secretário • Entregas Nov/2026 ({members.length} membros)
+                </h3>
+                <div className="space-y-2 text-xs">
+                  {members.map((m) => {
+                    const relatorioEntregue = (m.monthlyReports || []).find((r) => r.monthYear === MES_ATUAL);
+                    return (
+                      <div key={m.id} className="flex justify-between items-center p-2.5 rounded-lg bg-[#121A13]/40">
                         <div>
                           <strong>{m.name}</strong>
-                          <span className="block text-[10px] opacity-70">{m.serviceGroup} • {m.role}</span>
+                          <span className="block text-[10px] opacity-70">
+                            {m.serviceGroup} • {(m.timeLogs || []).length} sessões
+                          </span>
                         </div>
-                        <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 text-[10px]">
-                          {(m.timeLogs || []).length} sessões no BD
-                        </span>
+                        {relatorioEntregue ? (
+                          <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 text-[10px] font-bold">
+                            ✅ {relatorioEntregue.totalHours}h • {relatorioEntregue.estudos} est.
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-yellow-950/70 text-yellow-300 border border-yellow-800 text-[10px]">
+                            ⏳ Aguardando
+                          </span>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
 
               <h3 className="text-xs uppercase tracking-widest text-[#8FA38B] mb-2 font-bold">
                 Sessões Gravadas no PostgreSQL ({logsDoBanco.length})

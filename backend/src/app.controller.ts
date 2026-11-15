@@ -6,7 +6,6 @@ const prisma = new PrismaClient();
 
 @Controller('api')
 export class AppController implements OnModuleInit {
-  // Ao iniciar o servidor, garante que a Congregação Horto Florestal e os membros iniciais existem no Neon!
   async onModuleInit() {
     let cong = await prisma.congregation.findUnique({
       where: { inviteCode: 'HORTO-2026' },
@@ -21,7 +20,6 @@ export class AppController implements OnModuleInit {
         },
       });
 
-      // Cria os membros iniciais na base de dados na nuvem
       await prisma.member.createMany({
         data: [
           { name: 'Taylyson', phone: '68999990001', pin: '1234', role: 'PIONEIRO_REGULAR', monthlyGoal: 50, serviceGroup: 'Grupo 1 - Horto', congregationId: cong.id },
@@ -31,7 +29,6 @@ export class AppController implements OnModuleInit {
         ],
       });
 
-      // Cria os territórios iniciais no PostgreSQL
       await prisma.territory.createMany({
         data: [
           { id: 'T-01', nome: 'Quadra 01 • Arredores Parque do Horto', quadras: 4, status: 'Em andamento', responsavel: 'Taylyson', lat: -9.9482, lng: -67.8285, congregationId: cong.id },
@@ -39,20 +36,54 @@ export class AppController implements OnModuleInit {
           { id: 'T-03', nome: 'Quadra 03 • Rua das Acácias', quadras: 5, status: 'Em andamento', responsavel: 'Marcos Silva', lat: -9.9530, lng: -67.8210, congregationId: cong.id },
         ],
       });
-      console.log('✅ Dados iniciais da Congregação Horto Florestal criados no PostgreSQL!');
+    }
+
+    const totalEscalas = await prisma.assignment.count();
+    if (totalEscalas === 0) {
+      const membros = await prisma.member.findMany();
+      const taylyson = membros.find((m) => m.name === 'Taylyson') || membros[0];
+      const wdeyverson = membros.find((m) => m.name === 'Wdeyverson') || membros[0];
+      const marcos = membros.find((m) => m.name === 'Marcos Silva') || membros[0];
+
+      if (taylyson && wdeyverson && marcos) {
+        await prisma.assignment.createMany({
+          data: [
+            { cargo: 'Indicador de Entrada', data: 'Domingo, 15 Nov • 10:00', local: 'Salão Principal', status: 'pendente', memberId: taylyson.id },
+            { cargo: 'Operador de Áudio e Vídeo', data: 'Quinta, 19 Nov • 19:30', local: 'Cabine de Som', status: 'confirmado', memberId: wdeyverson.id },
+            { cargo: 'Microfone Volante', data: 'Domingo, 22 Nov • 10:00', local: 'Auditório', status: 'pendente', memberId: taylyson.id },
+            { cargo: 'Leitor do Estudo', data: 'Domingo, 22 Nov • 10:40', local: 'Palco Principal', status: 'confirmado', memberId: marcos.id },
+          ],
+        });
+      }
     }
   }
 
-  // 1. Listar todos os membros da congregação (para Login e Painel do Secretário)
-  @Get('members')
-  async getMembers() {
-    return prisma.member.findMany({
-      include: { timeLogs: true, monthlyReports: true },
-      orderBy: { name: 'asc' },
-    });
+  @Get()
+  getStatus() {
+    return { status: 'API Horto Florestal Online e Conectada ao PostgreSQL (Neon)!' };
   }
 
-  // 2. Criar novo membro (quando mais pessoas entrarem no app)
+  // 1. Listar todos os membros (mapeando bibleStudies/returnVisits para o Frontend ler)
+  @Get('members')
+  async getMembers() {
+    const members = await prisma.member.findMany({
+      include: { timeLogs: true, monthlyReports: true, assignments: true },
+      orderBy: { name: 'asc' },
+    });
+
+    return members.map((m) => ({
+      ...m,
+      monthlyReports: m.monthlyReports.map((r) => ({
+        ...r,
+        revisitas: r.returnVisits,
+        estudos: r.bibleStudies,
+        observacoes: r.notes || '',
+        status: 'ENVIADO',
+      })),
+    }));
+  }
+
+  // 2. Cadastrar novo membro
   @Post('members')
   async createMember(@Body() body: { name: string; phone: string; pin: string; role: string; monthlyGoal: number; serviceGroup: string }) {
     const cong = await prisma.congregation.findUnique({ where: { inviteCode: 'HORTO-2026' } });
@@ -69,7 +100,7 @@ export class AppController implements OnModuleInit {
     });
   }
 
-  // 3. Sincronizar sessões do cronómetro (Offline -> PostgreSQL)
+  // 3. Sincronizar sessões do cronómetro
   @Post('timelogs/sync')
   async syncTimeLogs(@Body() body: { memberId: string; logs: any[] }) {
     for (const log of body.logs) {
@@ -89,7 +120,7 @@ export class AppController implements OnModuleInit {
     return { synced: true };
   }
 
-  // 4. Listar e assumir territórios em tempo real
+  // 4. Listar e atualizar territórios
   @Get('territories')
   async getTerritories() {
     return prisma.territory.findMany({ orderBy: { id: 'asc' } });
@@ -100,6 +131,83 @@ export class AppController implements OnModuleInit {
     return prisma.territory.update({
       where: { id },
       data: { responsavel: body.responsavel, status: body.status },
+    });
+  }
+
+  // 5. Listar todas as Escalas (Assignments)
+  @Get('assignments')
+  async getAssignments() {
+    return prisma.assignment.findMany({
+      include: { member: true },
+      orderBy: { cargo: 'asc' },
+    });
+  }
+
+  // 6. Criar nova Escala
+  @Post('assignments')
+  async createAssignment(@Body() body: { cargo: string; data: string; local?: string; memberId: string }) {
+    return prisma.assignment.create({
+      data: {
+        cargo: body.cargo,
+        data: body.data,
+        local: body.local || 'Salão Principal',
+        status: 'pendente',
+        memberId: body.memberId,
+      },
+      include: { member: true },
+    });
+  }
+
+  // 7. Confirmar presença na Escala
+  @Post('assignments/:id/confirm')
+  async confirmAssignment(@Param('id') id: string) {
+    return prisma.assignment.update({
+      where: { id },
+      data: { status: 'confirmado' },
+    });
+  }
+
+  // 8. Fechar e Enviar Relatório Mensal (usando os nomes exatos do schema.prisma)
+  @Post('reports/submit')
+  async submitMonthlyReport(
+    @Body()
+    body: {
+      memberId: string;
+      monthYear: string;
+      totalHours: number;
+      revisitas: number;
+      estudos: number;
+      observacoes?: string;
+    },
+  ) {
+    const existente = await prisma.monthlyReport.findFirst({
+      where: {
+        memberId: body.memberId,
+        monthYear: body.monthYear,
+      },
+    });
+
+    if (existente) {
+      return prisma.monthlyReport.update({
+        where: { id: existente.id },
+        data: {
+          totalHours: Number(body.totalHours),
+          returnVisits: Number(body.revisitas) || 0,
+          bibleStudies: Number(body.estudos) || 0,
+          notes: body.observacoes || null,
+        },
+      });
+    }
+
+    return prisma.monthlyReport.create({
+      data: {
+        memberId: body.memberId,
+        monthYear: body.monthYear,
+        totalHours: Number(body.totalHours),
+        returnVisits: Number(body.revisitas) || 0,
+        bibleStudies: Number(body.estudos) || 0,
+        notes: body.observacoes || null,
+      },
     });
   }
 }
