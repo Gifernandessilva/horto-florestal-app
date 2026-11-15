@@ -1,5 +1,6 @@
 /* cspell:disable */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import L from 'leaflet';
 
 type Tab = 'inicio' | 'escalas' | 'territorios' | 'relatorios';
 
@@ -53,6 +54,138 @@ function lerCronometroDoUtilizador(userId: string) {
   return { running: false, seconds: 0 };
 }
 
+// Componente do Mapa Interativo Real (Leaflet)
+function TerritoryMap({
+  territorios,
+  focoCoords,
+  onSelectTerritory,
+}: {
+  territorios: TerritoryItem[];
+  focoCoords: [number, number] | null;
+  onSelectTerritory: (id: string) => void;
+}) {
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const layersRef = useRef<L.LayerGroup | null>(null);
+
+  // Inicializa o mapa centrado no Horto Florestal (Rio Branco - AC)
+  useEffect(() => {
+    if (!mapContainerRef.current || mapInstanceRef.current) return;
+
+    const map = L.map(mapContainerRef.current, {
+      center: [-9.9508, -67.8248],
+      zoom: 15,
+      zoomControl: true,
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap',
+      maxZoom: 19,
+    }).addTo(map);
+
+    layersRef.current = L.layerGroup().addTo(map);
+    mapInstanceRef.current = map;
+
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, []);
+
+  // Desenha as quadras (polígonos) e marcadores sempre que os territórios atualizam no PostgreSQL
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const layerGroup = layersRef.current;
+    if (!map || !layerGroup) return;
+
+    layerGroup.clearLayers();
+
+    territorios.forEach((t) => {
+      const isDisponivel = t.status === 'Disponível';
+      const cor = isDisponivel ? '#22c55e' : '#eab308'; // Verde = Disponível, Amarelo = Em andamento
+
+      // Desenha um polígono representando a área das quadras ao redor da coordenada do território
+      const deltaLat = 0.0014;
+      const deltaLng = 0.0018;
+      const bounds: L.LatLngTuple[] = [
+        [t.lat - deltaLat, t.lat ? t.lng - deltaLng : -67.825],
+        [t.lat + deltaLat, t.lng - deltaLng],
+        [t.lat + deltaLat, t.lng + deltaLng],
+        [t.lat - deltaLat, t.lng + deltaLng],
+      ];
+
+      const polygon = L.polygon(bounds, {
+        color: cor,
+        weight: 2,
+        fillColor: cor,
+        fillOpacity: 0.28,
+      }).addTo(layerGroup);
+
+      // Etiqueta central com o código do Território (ex: T-01, T-02)
+      const badgeIcon = L.divIcon({
+        className: 'custom-territory-pin',
+        html: `<div style="
+          background: ${isDisponivel ? '#15803d' : '#a16207'};
+          color: #ffffff;
+          font-weight: 800;
+          font-size: 11px;
+          padding: 3px 7px;
+          border-radius: 9999px;
+          border: 2px solid #ffffff;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+          white-space: nowrap;
+          text-align: center;
+        ">${t.id}</div>`,
+        iconSize: [44, 24],
+        iconAnchor: [22, 12],
+      });
+
+      const marker = L.marker([t.lat, t.lng], { icon: badgeIcon }).addTo(layerGroup);
+
+      const popupContent = `
+        <div style="font-family: sans-serif; min-width: 170px;">
+          <strong style="font-size: 13px; color: #121A13;">${t.id} • ${t.nome}</strong>
+          <p style="margin: 4px 0; font-size: 11px; color: #374151;">
+            Status: <b>${t.status}</b><br/>
+            Responsável: <b>${t.responsavel}</b><br/>
+            Total: <b>${t.quadras} quadras</b>
+          </p>
+        </div>
+      `;
+
+      polygon.bindPopup(popupContent);
+      marker.bindPopup(popupContent);
+
+      polygon.on('click', () => onSelectTerritory(t.id));
+      marker.on('click', () => onSelectTerritory(t.id));
+    });
+  }, [territorios, onSelectTerritory]);
+
+  // Move a câmera suavemente quando o usuário clica em "Focar no Mapa" ou "Centralizar no Horto"
+  useEffect(() => {
+    if (mapInstanceRef.current && focoCoords) {
+      mapInstanceRef.current.flyTo(focoCoords, 16, { duration: 0.8 });
+    }
+  }, [focoCoords]);
+
+  return (
+    <div className="relative rounded-2xl overflow-hidden border border-[#2F4231] shadow-lg">
+      <div ref={mapContainerRef} className="w-full h-64 z-0" />
+      <div className="bg-[#152017] px-3 py-2 flex justify-between items-center text-[11px] border-t border-[#2F4231]">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Disponível
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 inline-block"></span> Em andamento
+          </span>
+        </div>
+        <span className="text-[#8FA38B] font-semibold">Toque na quadra para detalhes</span>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [members, setMembers] = useState<MemberProfile[]>([]);
   const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
@@ -62,6 +195,10 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [loadingDb, setLoadingDb] = useState(true);
+
+  // Estados do Mapa GPS
+  const [focoMapa, setFocoMapa] = useState<[number, number] | null>(null);
+  const [territorioDestacado, setTerritorioDestacado] = useState<string | null>(null);
 
   const [showNewMemberForm, setShowNewMemberForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -235,15 +372,15 @@ export default function App() {
     alert(`⚡ Modo Offline: Sessão guardada no aparelho de ${currentUser.name}!`);
   };
 
-  const assumirTerritorioNoBanco = async (territorioId: string) => {
+  const atualizarTerritorioNoBanco = async (territorioId: string, novoStatus: string, novoResponsavel: string) => {
     if (!currentUser) return;
     try {
       const res = await fetch(`${API_URL}/territories/${territorioId}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          responsavel: currentUser.name,
-          status: 'Em andamento',
+          responsavel: novoResponsavel,
+          status: novoStatus,
         }),
       });
       if (res.ok) {
@@ -252,6 +389,22 @@ export default function App() {
     } catch {
       alert('Sem ligação ao servidor de momento.');
     }
+  };
+
+  const localizarMeuGps = () => {
+    if (!navigator.geolocation) {
+      alert('GPS não suportado neste navegador.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setFocoMapa([pos.coords.latitude, pos.coords.longitude]);
+      },
+      () => {
+        // Caso o navegador no PC bloqueie o GPS, centraliza no Parque do Horto Florestal
+        setFocoMapa([-9.9482, -67.8285]);
+      }
+    );
   };
 
   const cadastrarNovoMembro = async (e: React.FormEvent) => {
@@ -561,29 +714,95 @@ export default function App() {
             </div>
           )}
 
+          {/* ABA 3: MAPA GPS REAL + TERRITÓRIOS NO POSTGRESQL */}
           {activeTab === 'territorios' && (
             <div className="space-y-3">
-              <h2 className="text-xs uppercase tracking-widest text-[#8FA38B] font-bold">
-                Territórios no Banco de Dados ({territorios.length})
-              </h2>
-              {territorios.map((t) => (
-                <div key={t.id} className={`rounded-2xl p-4 border ${cardStyle}`}>
-                  <div className="flex justify-between">
-                    <span className="text-xs font-bold bg-[#466044] text-white px-2 py-0.5 rounded">{t.id}</span>
-                    <span className="text-xs opacity-80">{t.status}</span>
+              <div className="flex justify-between items-center">
+                <h2 className="text-xs uppercase tracking-widest text-[#8FA38B] font-bold">
+                  Mapa de Territórios • Horto ({territorios.length})
+                </h2>
+                <button
+                  onClick={localizarMeuGps}
+                  className="text-[11px] bg-[#253526] hover:bg-[#314733] border border-[#4A634C] text-white px-2.5 py-1 rounded-lg font-semibold cursor-pointer"
+                >
+                  📍 Centralizar no Horto
+                </button>
+              </div>
+
+              {/* MAPA LEAFLET INTERATIVO */}
+              <TerritoryMap
+                territorios={territorios}
+                focoCoords={focoMapa}
+                onSelectTerritory={(id) => setTerritorioDestacado(id)}
+              />
+
+              {/* LISTA DE QUADRAS SINCRONIZADAS COM O MAPA */}
+              {territorios.map((t) => {
+                const isDisponivel = t.status === 'Disponível';
+                const isDestacado = territorioDestacado === t.id;
+                return (
+                  <div
+                    key={t.id}
+                    className={`rounded-2xl p-4 border transition ${cardStyle} ${
+                      isDestacado ? 'ring-2 ring-emerald-400' : ''
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span
+                        className={`text-xs font-bold px-2 py-0.5 rounded text-white ${
+                          isDisponivel ? 'bg-emerald-700' : 'bg-yellow-700'
+                        }`}
+                      >
+                        {t.id}
+                      </span>
+                      <span
+                        className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                          isDisponivel
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                            : 'bg-yellow-950 text-yellow-300 border border-yellow-700'
+                        }`}
+                      >
+                        {t.status}
+                      </span>
+                    </div>
+
+                    <h3 className="font-bold text-sm mt-1.5">{t.nome}</h3>
+                    <p className="text-xs opacity-75">
+                      Responsável atual: <strong>{t.responsavel}</strong> • {t.quadras} quadras
+                    </p>
+
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => {
+                          setTerritorioDestacado(t.id);
+                          setFocoMapa([t.lat, t.lng]);
+                        }}
+                        className="flex-1 py-2 rounded-lg text-xs font-bold bg-[#253526] hover:bg-[#2F4432] border border-[#4A634C] text-white cursor-pointer"
+                      >
+                        🔍 Focar no Mapa
+                      </button>
+
+                      {isDisponivel ? (
+                        <button
+                          onClick={() => atualizarTerritorioNoBanco(t.id, 'Em andamento', currentUser.name)}
+                          className="flex-1 py-2 rounded-lg text-xs font-bold bg-[#466044] hover:bg-[#537150] text-white cursor-pointer"
+                        >
+                          ✋ Assumir ({currentUser.name})
+                        </button>
+                      ) : (
+                        (t.responsavel === currentUser.name || currentUser.role === 'ADMIN') && (
+                          <button
+                            onClick={() => atualizarTerritorioNoBanco(t.id, 'Disponível', 'Livre')}
+                            className="flex-1 py-2 rounded-lg text-xs font-bold bg-emerald-800 hover:bg-emerald-700 text-white cursor-pointer"
+                          >
+                            ✓ Concluir / Devolver
+                          </button>
+                        )
+                      )}
+                    </div>
                   </div>
-                  <h3 className="font-bold text-sm mt-1.5">{t.nome}</h3>
-                  <p className="text-xs opacity-75">Responsável atual: <strong>{t.responsavel}</strong> ({t.quadras} quadras)</p>
-                  {t.status === 'Disponível' && (
-                    <button
-                      onClick={() => assumirTerritorioNoBanco(t.id)}
-                      className="mt-3 w-full py-2 rounded-lg text-xs font-bold bg-[#466044] text-white cursor-pointer"
-                    >
-                      Assumir Território ({currentUser.name})
-                    </button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
