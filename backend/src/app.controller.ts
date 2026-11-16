@@ -1,8 +1,12 @@
 /* cspell:disable */
-import { Controller, Get, Post, Body, Param, OnModuleInit } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+function isPrivilegedRole(role?: string) {
+  return role === 'ANCIAO' || role === 'DESENVOLVEDOR' || role === 'ADMIN';
+}
 
 @Controller('api')
 export class AppController implements OnModuleInit {
@@ -22,10 +26,58 @@ export class AppController implements OnModuleInit {
 
       await prisma.member.createMany({
         data: [
-          { name: 'Taylyson', phone: '68999990001', pin: '1234', role: 'PIONEIRO_REGULAR', monthlyGoal: 50, serviceGroup: 'Grupo 1 - Horto', congregationId: cong.id },
-          { name: 'Wdeyverson', phone: '68999990002', pin: '1234', role: 'ADMIN', monthlyGoal: 50, serviceGroup: 'Administração / Secretário', congregationId: cong.id },
-          { name: 'Marcos Silva', phone: '68999990003', pin: '1234', role: 'PIONEIRO_AUXILIAR', monthlyGoal: 30, serviceGroup: 'Grupo 2 - Centro', congregationId: cong.id },
-          { name: 'Ana Beatriz', phone: '68999990004', pin: '1234', role: 'PUBLICADOR', monthlyGoal: 0, serviceGroup: 'Grupo 1 - Horto', congregationId: cong.id },
+          {
+            name: 'Taylyson',
+            phone: '68999990001',
+            pin: '1234',
+            role: 'PIONEIRO_REGULAR',
+            monthlyGoal: 50,
+            yearlyGoal: 600,
+            canUseTimer: false,
+            canViewAllHours: false,
+            canAssignParts: false,
+            serviceGroup: 'Grupo 1 - Horto',
+            congregationId: cong.id,
+          },
+          {
+            name: 'Wdeyverson',
+            phone: '68999990002',
+            pin: '1234',
+            role: 'DESENVOLVEDOR',
+            monthlyGoal: 50,
+            yearlyGoal: 600,
+            canUseTimer: true,
+            canViewAllHours: true,
+            canAssignParts: true,
+            serviceGroup: 'Administração / Desenvolvedor',
+            congregationId: cong.id,
+          },
+          {
+            name: 'Marcos Silva',
+            phone: '68999990003',
+            pin: '1234',
+            role: 'ANCIAO',
+            monthlyGoal: 30,
+            yearlyGoal: 360,
+            canUseTimer: true,
+            canViewAllHours: true,
+            canAssignParts: true,
+            serviceGroup: 'Corpo de Anciãos',
+            congregationId: cong.id,
+          },
+          {
+            name: 'Ana Beatriz',
+            phone: '68999990004',
+            pin: '1234',
+            role: 'PUBLICADOR',
+            monthlyGoal: 0,
+            yearlyGoal: 0,
+            canUseTimer: false,
+            canViewAllHours: false,
+            canAssignParts: false,
+            serviceGroup: 'Grupo 1 - Horto',
+            congregationId: cong.id,
+          },
         ],
       });
 
@@ -56,6 +108,34 @@ export class AppController implements OnModuleInit {
         });
       }
     }
+
+    const totalReunioes = await prisma.midweekMeeting.count();
+    if (totalReunioes === 0) {
+      await prisma.midweekMeeting.create({
+        data: {
+          weekLabel: '16 - 22 de Novembro',
+          chairman: 'Marcos Silva',
+          openingPrayer: 'Wdeyverson',
+          closingPrayer: 'Taylyson',
+          partsJson: JSON.stringify([
+            { section: 'Tesouros da Palavra de Deus', title: 'Discurso de 10 min • Joias Espirituais', assignee: 'Marcos Silva' },
+            { section: 'Faça Seu Melhor no Ministério', title: 'Primeira Conversa / Revisita', assignee: 'Ana Beatriz' },
+            { section: 'Nossa Vida Cristã', title: 'Estudo Bíblico de Congregação', assignee: 'Wdeyverson' },
+          ]),
+        },
+      });
+    }
+
+    const totalLimpezas = await prisma.cleaningSchedule.count();
+    if (totalLimpezas === 0) {
+      await prisma.cleaningSchedule.create({
+        data: {
+          weekLabel: 'Semana de 16/11 a 22/11',
+          groupName: 'Grupo 1 - Horto',
+          notes: 'Limpeza geral do auditório, banheiros e área externa após a reunião.',
+        },
+      });
+    }
   }
 
   @Get()
@@ -63,7 +143,6 @@ export class AppController implements OnModuleInit {
     return { status: 'API Horto Florestal Online e Conectada ao PostgreSQL (Neon)!' };
   }
 
-  // 1. Listar todos os membros (mapeando bibleStudies/returnVisits para o Frontend ler)
   @Get('members')
   async getMembers() {
     const members = await prisma.member.findMany({
@@ -83,26 +162,114 @@ export class AppController implements OnModuleInit {
     }));
   }
 
-  // 2. Cadastrar novo membro
   @Post('members')
-  async createMember(@Body() body: { name: string; phone: string; pin: string; role: string; monthlyGoal: number; serviceGroup: string }) {
+  async createMember(
+    @Body()
+    body: {
+      name: string;
+      phone: string;
+      pin: string;
+      role: string;
+      monthlyGoal: number;
+      yearlyGoal?: number;
+      serviceGroup: string;
+    },
+  ) {
     const cong = await prisma.congregation.findUnique({ where: { inviteCode: 'HORTO-2026' } });
+    const privileged = isPrivilegedRole(body.role);
+    const monthly = Number(body.monthlyGoal) || 0;
+    const yearly = Number(body.yearlyGoal) || monthly * 12;
+
     return prisma.member.create({
       data: {
         name: body.name,
         phone: body.phone,
         pin: body.pin || '1234',
         role: body.role || 'PUBLICADOR',
-        monthlyGoal: Number(body.monthlyGoal) || 0,
+        monthlyGoal: monthly,
+        yearlyGoal: yearly,
+        canUseTimer: privileged,
+        canViewAllHours: privileged,
+        canAssignParts: privileged,
         serviceGroup: body.serviceGroup || 'Grupo 1 - Horto',
         congregationId: cong!.id,
       },
     });
   }
 
-  // 3. Sincronizar sessões do cronómetro
+  // Remover membro (exige actorId de Ancião/Desenvolvedor/Admin e senha PIN válida)
+  @Delete('members/:id')
+  async deleteMember(
+    @Param('id') id: string,
+    @Query('actorId') actorId?: string,
+    @Query('pin') pin?: string,
+  ) {
+    if (!actorId || !pin) {
+      return { deleted: false, error: 'Informe o usuário e a senha para remover um membro.' };
+    }
+
+    const actor = await prisma.member.findUnique({ where: { id: actorId } });
+    if (!actor || !isPrivilegedRole(actor.role)) {
+      return { deleted: false, error: 'Apenas Anciãos ou Desenvolvedores podem remover membros.' };
+    }
+
+    if (actor.pin !== pin) {
+      return { deleted: false, error: 'Senha incorreta. Remoção cancelada.' };
+    }
+
+    if (actor.id === id) {
+      return { deleted: false, error: 'Você não pode remover o seu próprio usuário ativo.' };
+    }
+
+    const target = await prisma.member.findUnique({ where: { id } });
+    if (!target) {
+      return { deleted: false, error: 'Membro não encontrado.' };
+    }
+
+    await prisma.member.delete({ where: { id } });
+    return { deleted: true, removedName: target.name };
+  }
+
+  @Post('members/:id/permissions')
+  async updateMemberPermissions(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      actorId?: string;
+      canUseTimer?: boolean;
+      canViewAllHours?: boolean;
+      canAssignParts?: boolean;
+    },
+  ) {
+    if (body.actorId) {
+      const actor = await prisma.member.findUnique({ where: { id: body.actorId } });
+      if (!actor || !isPrivilegedRole(actor.role)) {
+        return { error: 'Apenas Anciãos ou Desenvolvedores podem alterar permissões.' };
+      }
+    }
+
+    const current = await prisma.member.findUnique({ where: { id } });
+    if (!current) return { error: 'Membro não encontrado.' };
+
+    return prisma.member.update({
+      where: { id },
+      data: {
+        canUseTimer: body.canUseTimer !== undefined ? Boolean(body.canUseTimer) : current.canUseTimer,
+        canViewAllHours:
+          body.canViewAllHours !== undefined ? Boolean(body.canViewAllHours) : current.canViewAllHours,
+        canAssignParts:
+          body.canAssignParts !== undefined ? Boolean(body.canAssignParts) : current.canAssignParts,
+      },
+    });
+  }
+
   @Post('timelogs/sync')
   async syncTimeLogs(@Body() body: { memberId: string; logs: any[] }) {
+    const member = await prisma.member.findUnique({ where: { id: body.memberId } });
+    if (!member || (!member.canUseTimer && !isPrivilegedRole(member.role))) {
+      return { synced: false, error: 'Cronômetro bloqueado para este membro.' };
+    }
+
     for (const log of body.logs) {
       await prisma.timeLog.upsert({
         where: { id: log.id },
@@ -120,7 +287,6 @@ export class AppController implements OnModuleInit {
     return { synced: true };
   }
 
-  // 4. Listar e atualizar territórios
   @Get('territories')
   async getTerritories() {
     return prisma.territory.findMany({ orderBy: { id: 'asc' } });
@@ -134,7 +300,6 @@ export class AppController implements OnModuleInit {
     });
   }
 
-  // 5. Listar todas as Escalas (Assignments)
   @Get('assignments')
   async getAssignments() {
     return prisma.assignment.findMany({
@@ -143,9 +308,18 @@ export class AppController implements OnModuleInit {
     });
   }
 
-  // 6. Criar nova Escala
   @Post('assignments')
-  async createAssignment(@Body() body: { cargo: string; data: string; local?: string; memberId: string }) {
+  async createAssignment(
+    @Body()
+    body: { cargo: string; data: string; local?: string; memberId: string; actorId?: string },
+  ) {
+    if (body.actorId) {
+      const actor = await prisma.member.findUnique({ where: { id: body.actorId } });
+      if (!actor || (!actor.canAssignParts && !isPrivilegedRole(actor.role))) {
+        return { error: 'Sem permissão para criar ou enviar designações.' };
+      }
+    }
+
     return prisma.assignment.create({
       data: {
         cargo: body.cargo,
@@ -158,7 +332,6 @@ export class AppController implements OnModuleInit {
     });
   }
 
-  // 7. Confirmar presença na Escala
   @Post('assignments/:id/confirm')
   async confirmAssignment(@Param('id') id: string) {
     return prisma.assignment.update({
@@ -167,7 +340,16 @@ export class AppController implements OnModuleInit {
     });
   }
 
-  // 8. Fechar e Enviar Relatório Mensal (usando os nomes exatos do schema.prisma)
+  @Get('midweek-meetings')
+  async getMidweekMeetings() {
+    return prisma.midweekMeeting.findMany({ orderBy: { createdAt: 'desc' } });
+  }
+
+  @Get('cleaning-schedules')
+  async getCleaningSchedules() {
+    return prisma.cleaningSchedule.findMany({ orderBy: { createdAt: 'desc' } });
+  }
+
   @Post('reports/submit')
   async submitMonthlyReport(
     @Body()

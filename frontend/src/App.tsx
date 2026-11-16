@@ -1,3 +1,4 @@
+
 /* cspell:disable */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import L from 'leaflet';
@@ -45,6 +46,10 @@ interface MemberProfile {
   pin: string;
   role: string;
   monthlyGoal: number;
+  yearlyGoal?: number;
+  canUseTimer?: boolean;
+  canViewAllHours?: boolean;
+  canAssignParts?: boolean;
   serviceGroup: string;
   timeLogs?: TimeSession[];
   monthlyReports?: MonthlyReportItem[];
@@ -60,8 +65,18 @@ interface TerritoryItem {
   lng: number;
 }
 
-const API_URL = 'http://localhost:3000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 const MES_ATUAL = '2026-11';
+
+function isElderOrDev(user: MemberProfile | null) {
+  if (!user) return false;
+  return user.role === 'ANCIAO' || user.role === 'DESENVOLVEDOR' || user.role === 'ADMIN';
+}
+
+function canMemberUseTimer(user: MemberProfile | null) {
+  if (!user) return false;
+  return isElderOrDev(user) || user.canUseTimer === true;
+}
 
 function lerCronometroDoUtilizador(userId: string) {
   const savedTimer = localStorage.getItem(`@horto:timer_${userId}`);
@@ -220,7 +235,6 @@ export default function App() {
   const [focoMapa, setFocoMapa] = useState<[number, number] | null>(null);
   const [territorioDestacado, setTerritorioDestacado] = useState<string | null>(null);
 
-  // Estados de novo membro
   const [showNewMemberForm, setShowNewMemberForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
@@ -228,17 +242,19 @@ export default function App() {
   const [newGoal, setNewGoal] = useState(0);
   const [newGroup, setNewGroup] = useState('Grupo 1 - Horto');
 
-  // Estados para criar nova Escala (Assignment) no banco
+  // Estados para remoção protegida por senha (apenas Anciãos e Desenvolvedores)
+  const [memberToDeleteId, setMemberToDeleteId] = useState<string | null>(null);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deletingMember, setDeletingMember] = useState(false);
+
   const [showNewAssignmentForm, setShowNewAssignmentForm] = useState(false);
   const [novoCargo, setNovoCargo] = useState('');
   const [novaDataEscala, setNovaDataEscala] = useState('');
   const [novoLocalEscala, setNovoLocalEscala] = useState('Salão Principal');
   const [membroDesignadoId, setMembroDesignadoId] = useState('');
 
-  // Estados do Relatório Mensal (MonthlyReport)
   const [observacoesRelatorio, setObservacoesRelatorio] = useState('');
 
-  // Estados do Cronômetro
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [revisitas, setRevisitas] = useState(2);
@@ -250,8 +266,15 @@ export default function App() {
 
   const aplicarUtilizador = useCallback((u: MemberProfile | null) => {
     setCurrentUser(u);
+    setMemberToDeleteId(null);
+    setDeletePassword('');
     if (u) {
       localStorage.setItem('@horto:current_user_id', u.id);
+      if (!canMemberUseTimer(u)) {
+        setIsRunning(false);
+        setElapsedSeconds(0);
+        return;
+      }
       const estado = lerCronometroDoUtilizador(u.id);
       setIsRunning(estado.running);
       setElapsedSeconds(estado.seconds);
@@ -320,8 +343,13 @@ export default function App() {
     };
   }, [carregarDadosDoBanco]);
 
+  const podeAtivarCronometro = canMemberUseTimer(currentUser);
+  const podeVerTodasHoras = Boolean(currentUser && (currentUser.canViewAllHours || isElderOrDev(currentUser)));
+  const podeEnviarDesignacoes = Boolean(currentUser && (currentUser.canAssignParts || isElderOrDev(currentUser)));
+  const podeGerirPermissoes = isElderOrDev(currentUser);
+
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !podeAtivarCronometro) return;
     const storageKey = `@horto:timer_${currentUser.id}`;
     let interval: ReturnType<typeof setInterval>;
 
@@ -342,7 +370,7 @@ export default function App() {
       );
     }
     return () => clearInterval(interval);
-  }, [isRunning, elapsedSeconds, currentUser]);
+  }, [isRunning, elapsedSeconds, currentUser, podeAtivarCronometro]);
 
   const formatTime = (totalSeconds: number) => {
     const hrs = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
@@ -351,8 +379,19 @@ export default function App() {
     return `${hrs}:${mins}:${secs}`;
   };
 
+  const alternarCronometro = () => {
+    if (!podeAtivarCronometro) {
+      alert('🔒 O cronômetro está bloqueado para este perfil. Peça liberação a um Ancião ou Desenvolvedor.');
+      return;
+    }
+    setIsRunning(!isRunning);
+  };
+
   const finalizarSessao = async () => {
-    if (!currentUser) return;
+    if (!currentUser || !podeAtivarCronometro) {
+      alert('🔒 O cronômetro está bloqueado para este perfil.');
+      return;
+    }
     setIsRunning(false);
 
     const novoRegistro: TimeSession = {
@@ -387,6 +426,11 @@ export default function App() {
       });
 
       if (res.ok) {
+        const data = await res.json();
+        if (data.error) {
+          alert(`⚠️ ${data.error}`);
+          return;
+        }
         const filaAtualizada = novaFila.map((s) =>
           s.id === novoRegistro.id ? { ...s, synced: true } : s
         );
@@ -422,7 +466,6 @@ export default function App() {
     }
   };
 
-  // Confirmar escala direto no PostgreSQL
   const confirmarEscalaNoBanco = async (escalaId: string) => {
     try {
       const res = await fetch(`${API_URL}/assignments/${escalaId}/confirm`, {
@@ -436,10 +479,9 @@ export default function App() {
     }
   };
 
-  // Criar nova escala no PostgreSQL
   const criarNovaEscalaNoBanco = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!novoCargo.trim() || !novaDataEscala.trim() || !membroDesignadoId) return;
+    if (!podeEnviarDesignacoes || !novoCargo.trim() || !novaDataEscala.trim() || !membroDesignadoId) return;
 
     try {
       const res = await fetch(`${API_URL}/assignments`, {
@@ -450,6 +492,7 @@ export default function App() {
           data: novaDataEscala,
           local: novoLocalEscala,
           memberId: membroDesignadoId,
+          actorId: currentUser?.id,
         }),
       });
 
@@ -458,14 +501,86 @@ export default function App() {
         setNovaDataEscala('');
         setShowNewAssignmentForm(false);
         await carregarDadosDoBanco();
-        alert('📅 Nova designação gravada no PostgreSQL!');
+        alert('📅 Nova designação / parte gravada no PostgreSQL!');
       }
     } catch {
-      alert('Erro ao criar nova escala.');
+      alert('Erro ao criar nova designação.');
     }
   };
 
-  // Enviar Relatório Mensal Oficial para a tabela MonthlyReport do PostgreSQL
+  const alternarPermissaoMembro = async (
+    targetMember: MemberProfile,
+    campo: 'canUseTimer' | 'canViewAllHours' | 'canAssignParts'
+  ) => {
+    if (!currentUser || !podeGerirPermissoes) return;
+    const valorAtual =
+      campo === 'canUseTimer'
+        ? Boolean(targetMember.canUseTimer)
+        : campo === 'canViewAllHours'
+        ? Boolean(targetMember.canViewAllHours)
+        : Boolean(targetMember.canAssignParts);
+
+    try {
+      const res = await fetch(`${API_URL}/members/${targetMember.id}/permissions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actorId: currentUser.id,
+          [campo]: !valorAtual,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.error) {
+          alert(`⚠️ ${data.error}`);
+          return;
+        }
+        await carregarDadosDoBanco();
+      }
+    } catch {
+      alert('Erro ao atualizar permissão no banco.');
+    }
+  };
+
+  const confirmarRemocaoMembro = async (targetMember: MemberProfile) => {
+    if (!currentUser || !podeGerirPermissoes) {
+      alert('🔒 Apenas Anciãos e Desenvolvedores podem remover membros.');
+      return;
+    }
+
+    if (!deletePassword.trim()) {
+      alert('🔑 Digite a sua senha para confirmar a remoção.');
+      return;
+    }
+
+    setDeletingMember(true);
+    try {
+      const query = new URLSearchParams({
+        actorId: currentUser.id,
+        pin: deletePassword.trim(),
+      });
+
+      const res = await fetch(`${API_URL}/members/${targetMember.id}?${query.toString()}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.deleted === false) {
+        alert(`⚠️ ${data.error || 'Não foi possível remover o membro.'}`);
+        return;
+      }
+
+      setMemberToDeleteId(null);
+      setDeletePassword('');
+      await carregarDadosDoBanco();
+      alert(`🗑️ Membro "${data.removedName || targetMember.name}" removido do PostgreSQL.`);
+    } catch {
+      alert('Erro de conexão ao tentar remover o membro.');
+    } finally {
+      setDeletingMember(false);
+    }
+  };
+
   const enviarRelatorioMensalNoBanco = async (horasTotais: number) => {
     if (!currentUser) return;
     try {
@@ -520,6 +635,7 @@ export default function App() {
           pin: '1234',
           role: newRole,
           monthlyGoal: newGoal,
+          yearlyGoal: newGoal * 12,
           serviceGroup: newGroup,
         }),
       });
@@ -613,7 +729,7 @@ export default function App() {
                 />
               </div>
               <div>
-                <label className="block mb-1 text-[#A5B8A3]">Modalidade:</label>
+                <label className="block mb-1 text-[#A5B8A3]">Cargo / Modalidade:</label>
                 <select
                   value={newRole}
                   onChange={(e) => {
@@ -627,7 +743,8 @@ export default function App() {
                   <option value="PUBLICADOR">Publicador</option>
                   <option value="PIONEIRO_AUXILIAR">Pioneiro Auxiliar (30h)</option>
                   <option value="PIONEIRO_REGULAR">Pioneiro Regular (50h)</option>
-                  <option value="ADMIN">Administrador / Secretário</option>
+                  <option value="ANCIAO">Ancião</option>
+                  <option value="DESENVOLVEDOR">Desenvolvedor</option>
                 </select>
               </div>
               <div>
@@ -711,102 +828,193 @@ export default function App() {
                 Horto Florestal <span className="text-[10px] bg-[#8FA38B] text-[#121A13] px-1.5 py-0.5 rounded">APP</span>
               </h1>
               <p className="text-sm text-[#A5B8A3]">
-                Olá, <strong className="text-white">{currentUser.name}</strong>! • <span className="text-xs">{currentUser.serviceGroup}</span>
+                Olá, <strong className="text-white">{currentUser.name}</strong>! • <span className="text-xs">{currentUser.role.replace('_', ' ')}</span>
               </p>
             </div>
           </div>
 
           {activeTab === 'inicio' && (
-            <div>
-              <div
-                onClick={() => setActiveTab('escalas')}
-                className={`rounded-2xl p-3.5 mb-4 border cursor-pointer flex justify-between items-center ${cardStyle}`}
-              >
+            <div className="space-y-3.5">
+              <div className="flex items-center justify-between px-1">
                 <div>
-                  <span className="text-[11px] uppercase tracking-wider opacity-75 block">Próxima Escala no Banco:</span>
-                  <strong className="text-sm">
-                    {minhaProximaEscala ? `${minhaProximaEscala.cargo} • ${minhaProximaEscala.data}` : 'Ver Escalas da Congregação'}
-                  </strong>
+                  <span className="text-[10px] uppercase tracking-widest text-[#8FA38B] font-bold block">
+                    Novembro 2026 • Hourglass
+                  </span>
+                  <span className="text-xs font-semibold text-white">
+                    {podeAtivarCronometro
+                      ? isElderOrDev(currentUser)
+                        ? 'Cronômetro Liberado (Ancião / Dev)'
+                        : 'Cronômetro Liberado pelo Ancião/Dev'
+                      : 'Bloqueado (Requer liberação de Ancião/Dev)'}
+                  </span>
                 </div>
-                <span className="text-xs bg-[#466044] text-white px-2.5 py-1 rounded-lg font-semibold">Escalas →</span>
+                <span
+                  className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${
+                    podeAtivarCronometro
+                      ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700'
+                      : 'bg-amber-950/70 text-amber-300 border-amber-700'
+                  }`}
+                >
+                  {podeAtivarCronometro ? '🔓 Liberado' : '🔒 Bloqueado'}
+                </span>
               </div>
 
-              <div className={`rounded-2xl p-6 text-center shadow-lg border ${cardStyle}`}>
-                <div className="w-44 h-44 mx-auto rounded-full border-8 border-[#4A6B4D] flex flex-col items-center justify-center mb-5">
+              <div className={`rounded-3xl p-6 text-center shadow-xl border ${cardStyle}`}>
+                <div
+                  className={`w-48 h-48 mx-auto rounded-full border-[10px] flex flex-col items-center justify-center mb-5 transition ${
+                    podeAtivarCronometro
+                      ? isRunning
+                        ? 'border-emerald-500 shadow-[0_0_24px_rgba(34,197,94,0.22)]'
+                        : 'border-[#4A6B4D]'
+                      : 'border-[#39473A] opacity-85'
+                  }`}
+                >
+                  <span className="text-[10px] uppercase tracking-widest opacity-70 mb-1">
+                    {isRunning ? 'Em andamento' : podeAtivarCronometro ? 'Pronto para iniciar' : 'Bloqueado'}
+                  </span>
                   <span className="text-4xl font-mono font-extrabold tracking-tight">
                     {formatTime(elapsedSeconds)}
                   </span>
-                  <span className="text-[11px] opacity-75 mt-1">
-                    {isRunning ? 'Gravando tempo...' : 'Pausado'}
+                  <span className="text-[11px] text-[#8FA38B] font-semibold mt-1.5">
+                    Mês: {horasSalvas}h
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setIsRunning(!isRunning)}
-                    className="py-3 px-4 rounded-xl font-bold uppercase text-sm bg-[#466044] hover:bg-[#537150] text-white cursor-pointer"
-                  >
-                    {isRunning ? '⏸ Pausar' : '▶ Iniciar'}
-                  </button>
-                  <button
-                    onClick={finalizarSessao}
-                    disabled={elapsedSeconds === 0}
-                    className="py-3 px-4 rounded-xl font-bold uppercase text-sm bg-[#EAECE9] text-[#1A261C] disabled:opacity-40 cursor-pointer"
-                  >
-                    ⏹ Salvar no BD
-                  </button>
+                {podeAtivarCronometro ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={alternarCronometro}
+                      className="py-3 px-4 rounded-xl font-bold uppercase text-xs tracking-wider bg-[#466044] hover:bg-[#537150] text-white cursor-pointer"
+                    >
+                      {isRunning ? '⏸ Pausar' : '▶ Iniciar'}
+                    </button>
+                    <button
+                      onClick={finalizarSessao}
+                      disabled={elapsedSeconds === 0}
+                      className="py-3 px-4 rounded-xl font-bold uppercase text-xs tracking-wider bg-[#EAECE9] text-[#1A261C] disabled:opacity-40 cursor-pointer"
+                    >
+                      ⏹ Salvar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl p-3.5 bg-[#121A13]/60 border border-[#2F4231] text-left">
+                    <p className="text-xs font-bold text-amber-300">
+                      🔒 Cronômetro bloqueado para este membro
+                    </p>
+                    <p className="text-[11px] opacity-80 mt-0.5">
+                      Um Ancião ou Desenvolvedor pode liberar o cronômetro na aba Relatórios. Você ainda pode acompanhar suas revisitas, estudos e escalas.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5 text-center">
+                <div className={`rounded-2xl p-3 border ${cardStyle}`}>
+                  <span className="text-[10px] uppercase opacity-70 block">Horas Mês</span>
+                  <strong className="text-base font-extrabold">{horasSalvas}h</strong>
+                </div>
+                <div className={`rounded-2xl p-3 border ${cardStyle}`}>
+                  <span className="text-[10px] uppercase opacity-70 block">Revisitas</span>
+                  <strong className="text-base font-extrabold">{revisitas}</strong>
+                </div>
+                <div className={`rounded-2xl p-3 border ${cardStyle}`}>
+                  <span className="text-[10px] uppercase opacity-70 block">Estudos</span>
+                  <strong className="text-base font-extrabold">{estudos}</strong>
                 </div>
               </div>
 
               {currentUser.monthlyGoal > 0 && (
-                <div className={`mt-4 rounded-2xl p-4 border ${cardStyle}`}>
-                  <div className="flex justify-between text-sm font-bold mb-1">
-                    <span>Meta do Mês ({currentUser.role.replace('_', ' ')})</span>
-                    <span>{horasSalvas}h de {metaMensal}h ({progressoPercentual}%)</span>
+                <div className={`rounded-2xl p-3.5 border ${cardStyle}`}>
+                  <div className="flex justify-between text-xs font-bold mb-1.5">
+                    <span>Meta Mensal ({currentUser.role.replace('_', ' ')})</span>
+                    <span>{horasSalvas}h / {metaMensal}h ({progressoPercentual}%)</span>
                   </div>
-                  <div className="w-full h-3 bg-[#101711] rounded-full overflow-hidden">
+                  <div className="w-full h-2.5 bg-[#101711] rounded-full overflow-hidden">
                     <div className="h-full bg-[#648C61]" style={{ width: `${progressoPercentual}%` }} />
                   </div>
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3 mt-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div className={`border rounded-xl p-3 flex items-center justify-between ${cardStyle}`}>
-                  <span className="text-sm font-semibold">Revisitas: {revisitas}</span>
-                  <button onClick={() => setRevisitas(revisitas + 1)} className="w-8 h-8 rounded-lg bg-[#466044] text-white font-bold cursor-pointer">+</button>
+                  <span className="text-xs font-semibold">Revisitas: {revisitas}</span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setRevisitas(Math.max(0, revisitas - 1))}
+                      className="w-7 h-7 rounded-lg bg-[#253526] text-white font-bold cursor-pointer"
+                    >
+                      -
+                    </button>
+                    <button
+                      onClick={() => setRevisitas(revisitas + 1)}
+                      className="w-7 h-7 rounded-lg bg-[#466044] text-white font-bold cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
+
                 <div className={`border rounded-xl p-3 flex items-center justify-between ${cardStyle}`}>
-                  <span className="text-sm font-semibold">Estudos: {estudos}</span>
-                  <button onClick={() => setEstudos(estudos + 1)} className="w-8 h-8 rounded-lg bg-[#466044] text-white font-bold cursor-pointer">+</button>
+                  <span className="text-xs font-semibold">Estudos: {estudos}</span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setEstudos(Math.max(0, estudos - 1))}
+                      className="w-7 h-7 rounded-lg bg-[#253526] text-white font-bold cursor-pointer"
+                    >
+                      -
+                    </button>
+                    <button
+                      onClick={() => setEstudos(estudos + 1)}
+                      className="w-7 h-7 rounded-lg bg-[#466044] text-white font-bold cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
+              </div>
+
+              <div
+                onClick={() => setActiveTab('escalas')}
+                className={`rounded-2xl p-3.5 border cursor-pointer flex justify-between items-center ${cardStyle}`}
+              >
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider opacity-75 block">Próxima Escala / Parte:</span>
+                  <strong className="text-xs">
+                    {minhaProximaEscala ? `${minhaProximaEscala.cargo} • ${minhaProximaEscala.data}` : 'Ver Escalas da Congregação'}
+                  </strong>
+                </div>
+                <span className="text-xs bg-[#466044] text-white px-2.5 py-1 rounded-lg font-semibold">Ver →</span>
               </div>
             </div>
           )}
 
-          {/* ABA 2: ESCALAS REAIS NO POSTGRESQL */}
           {activeTab === 'escalas' && (
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <h2 className="text-xs uppercase tracking-widest text-[#8FA38B] font-bold">
-                  Escalas no Banco de Dados ({escalas.length})
+                  Escalas e Designações ({escalas.length})
                 </h2>
-                <button
-                  onClick={() => setShowNewAssignmentForm(!showNewAssignmentForm)}
-                  className="text-[11px] bg-[#466044] hover:bg-[#537150] text-white px-2.5 py-1 rounded-lg font-bold cursor-pointer"
-                >
-                  {showNewAssignmentForm ? '✕ Fechar' : '+ Nova Escala'}
-                </button>
+                {podeEnviarDesignacoes ? (
+                  <button
+                    onClick={() => setShowNewAssignmentForm(!showNewAssignmentForm)}
+                    className="text-[11px] bg-[#466044] hover:bg-[#537150] text-white px-2.5 py-1 rounded-lg font-bold cursor-pointer"
+                  >
+                    {showNewAssignmentForm ? '✕ Fechar' : '+ Nova Designação'}
+                  </button>
+                ) : (
+                  <span className="text-[10px] opacity-70">Somente autorizados enviam partes</span>
+                )}
               </div>
 
-              {showNewAssignmentForm && (
+              {showNewAssignmentForm && podeEnviarDesignacoes && (
                 <form onSubmit={criarNovaEscalaNoBanco} className={`rounded-2xl p-4 border space-y-2.5 text-xs ${cardStyle}`}>
-                  <h3 className="font-bold text-sm text-emerald-400">Nova Designação da Congregação</h3>
+                  <h3 className="font-bold text-sm text-emerald-400">Nova Escala / Discurso / Parte</h3>
                   <div>
-                    <label className="block mb-1 opacity-80">Cargo / Função:</label>
+                    <label className="block mb-1 opacity-80">Discurso, Parte ou Função:</label>
                     <input
                       type="text"
                       required
-                      placeholder="Ex: Indicador de Auditório"
+                      placeholder="Ex: Discurso Público • Fé nas Promessas"
                       value={novoCargo}
                       onChange={(e) => setNovoCargo(e.target.value)}
                       className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
@@ -852,7 +1060,7 @@ export default function App() {
                     type="submit"
                     className="w-full py-2.5 rounded-lg font-bold bg-emerald-700 hover:bg-emerald-600 text-white cursor-pointer"
                   >
-                    💾 Salvar Escala no PostgreSQL
+                    💾 Salvar Designação no PostgreSQL
                   </button>
                 </form>
               )}
@@ -895,7 +1103,6 @@ export default function App() {
             </div>
           )}
 
-          {/* ABA 3: MAPA GPS REAL + TERRITÓRIOS */}
           {activeTab === 'territorios' && (
             <div className="space-y-3">
               <div className="flex justify-between items-center">
@@ -969,7 +1176,7 @@ export default function App() {
                           ✋ Assumir ({currentUser.name})
                         </button>
                       ) : (
-                        (t.responsavel === currentUser.name || currentUser.role === 'ADMIN') && (
+                        (t.responsavel === currentUser.name || isElderOrDev(currentUser)) && (
                           <button
                             onClick={() => atualizarTerritorioNoBanco(t.id, 'Disponível', 'Livre')}
                             className="flex-1 py-2 rounded-lg text-xs font-bold bg-emerald-800 hover:bg-emerald-700 text-white cursor-pointer"
@@ -985,7 +1192,6 @@ export default function App() {
             </div>
           )}
 
-          {/* ABA 4: FECHAMENTO MENSAL (MONTHLY REPORT) + PAINEL DO SECRETÁRIO */}
           {activeTab === 'relatorios' && (
             <div>
               <div className="flex justify-between items-center mb-3">
@@ -1037,36 +1243,128 @@ export default function App() {
                 </button>
               </div>
 
-              {/* PAINEL DO SECRETÁRIO / ADMIN */}
-              <div className={`rounded-2xl p-4 border mb-4 border-emerald-700/60 ${cardStyle}`}>
-                <h3 className="text-xs font-extrabold uppercase text-emerald-400 mb-2">
-                  🛡️ Painel do Secretário • Entregas Nov/2026 ({members.length} membros)
-                </h3>
-                <div className="space-y-2 text-xs">
-                  {members.map((m) => {
-                    const relatorioEntregue = (m.monthlyReports || []).find((r) => r.monthYear === MES_ATUAL);
-                    return (
-                      <div key={m.id} className="flex justify-between items-center p-2.5 rounded-lg bg-[#121A13]/40">
-                        <div>
-                          <strong>{m.name}</strong>
-                          <span className="block text-[10px] opacity-70">
-                            {m.serviceGroup} • {(m.timeLogs || []).length} sessões
-                          </span>
+              {podeVerTodasHoras ? (
+                <div className={`rounded-2xl p-4 border mb-4 border-emerald-700/60 ${cardStyle}`}>
+                  <h3 className="text-xs font-extrabold uppercase text-emerald-400 mb-2">
+                    🛡️ Horas e Permissões Nov/2026 ({members.length} membros)
+                  </h3>
+                  <div className="space-y-2 text-xs">
+                    {members.map((m) => {
+                      const relatorioEntregue = (m.monthlyReports || []).find((r) => r.monthYear === MES_ATUAL);
+                      const segMembro = (m.timeLogs || []).reduce((acc, l) => acc + l.durationSec, 0);
+                      const horasMembro = relatorioEntregue
+                        ? relatorioEntregue.totalHours
+                        : +(18 + segMembro / 3600).toFixed(2);
+                      const timerLiberado = canMemberUseTimer(m);
+                      const confirmandoRemocao = memberToDeleteId === m.id;
+
+                      return (
+                        <div key={m.id} className="p-2.5 rounded-lg bg-[#121A13]/40 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <strong>{m.name}</strong>
+                              <span className="block text-[10px] opacity-75">
+                                {m.role.replace('_', ' ')} • Total: <strong>{horasMembro}h</strong>
+                              </span>
+                            </div>
+                            {relatorioEntregue ? (
+                              <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 text-[10px] font-bold">
+                                ✅ {relatorioEntregue.totalHours}h • {relatorioEntregue.estudos} est.
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded bg-yellow-950/70 text-yellow-300 border border-yellow-800 text-[10px]">
+                                ⏳ Aguardando
+                              </span>
+                            )}
+                          </div>
+
+                          {podeGerirPermissoes && m.id !== currentUser.id && (
+                            <>
+                              <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[#2F4231]">
+                                <button
+                                  onClick={() => alternarPermissaoMembro(m, 'canUseTimer')}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
+                                    timerLiberado
+                                      ? 'bg-emerald-900/70 text-emerald-200'
+                                      : 'bg-red-950/80 text-red-300'
+                                  }`}
+                                >
+                                  {timerLiberado ? '⏱️ Cronômetro Liberado' : '🔒 Liberar Cronômetro'}
+                                </button>
+
+                                <button
+                                  onClick={() => alternarPermissaoMembro(m, 'canViewAllHours')}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
+                                    m.canViewAllHours
+                                      ? 'bg-emerald-900/70 text-emerald-200'
+                                      : 'bg-[#233325] text-[#A5B8A3]'
+                                  }`}
+                                >
+                                  {m.canViewAllHours ? '👁️ Vê Todas Horas' : '👁️‍🗨️ Só Próprias Horas'}
+                                </button>
+
+                                <button
+                                  onClick={() => alternarPermissaoMembro(m, 'canAssignParts')}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
+                                    m.canAssignParts
+                                      ? 'bg-emerald-900/70 text-emerald-200'
+                                      : 'bg-[#233325] text-[#A5B8A3]'
+                                  }`}
+                                >
+                                  {m.canAssignParts ? '📋 Envia Designações' : '🚫 Não Envia Partes'}
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    if (confirmandoRemocao) {
+                                      setMemberToDeleteId(null);
+                                      setDeletePassword('');
+                                    } else {
+                                      setMemberToDeleteId(m.id);
+                                      setDeletePassword('');
+                                    }
+                                  }}
+                                  className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-800/70 cursor-pointer"
+                                >
+                                  {confirmandoRemocao ? '✕ Cancelar' : '🗑️ Remover'}
+                                </button>
+                              </div>
+
+                              {confirmandoRemocao && (
+                                <div className="p-2 rounded-lg bg-red-950/40 border border-red-800/70 space-y-1.5">
+                                  <p className="text-[10px] text-red-200 font-semibold">
+                                    🔑 Digite a senha de {currentUser.name} para remover <strong>{m.name}</strong>:
+                                  </p>
+                                  <div className="flex gap-1.5">
+                                    <input
+                                      type="password"
+                                      placeholder="Sua senha (PIN)"
+                                      value={deletePassword}
+                                      onChange={(e) => setDeletePassword(e.target.value)}
+                                      className="flex-1 px-2 py-1 rounded bg-[#121A13] border border-red-800 text-white text-[11px]"
+                                    />
+                                    <button
+                                      disabled={deletingMember}
+                                      onClick={() => confirmarRemocaoMembro(m)}
+                                      className="px-2.5 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-[10px] font-bold disabled:opacity-50 cursor-pointer"
+                                    >
+                                      {deletingMember ? '...' : 'Confirmar'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
-                        {relatorioEntregue ? (
-                          <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 text-[10px] font-bold">
-                            ✅ {relatorioEntregue.totalHours}h • {relatorioEntregue.estudos} est.
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded bg-yellow-950/70 text-yellow-300 border border-yellow-800 text-[10px]">
-                            ⏳ Aguardando
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className={`rounded-2xl p-3.5 border mb-4 text-xs opacity-80 ${cardStyle}`}>
+                  🔒 A visualização do total de horas de todos os membros é restrita a usuários autorizados.
+                </div>
+              )}
 
               <h3 className="text-xs uppercase tracking-widest text-[#8FA38B] mb-2 font-bold">
                 Sessões Gravadas no PostgreSQL ({logsDoBanco.length})

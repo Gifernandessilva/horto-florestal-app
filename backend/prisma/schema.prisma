@@ -1,4 +1,3 @@
-// cspell:disable
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,29 +8,33 @@ datasource db {
 }
 
 model Congregation {
-  id          String       @id @default(uuid())
-  name        String
-  city        String       @default("Rio Branco - AC")
-  inviteCode  String       @unique
-  members     Member[]
-  territories Territory[]
-  createdAt   DateTime     @default(now())
+  id         String      @id @default(uuid())
+  name       String
+  city       String
+  inviteCode String      @unique
+  members    Member[]
+  territory  Territory[]
+  createdAt  DateTime    @default(now())
 }
 
 model Member {
-  id             String          @id @default(uuid())
-  name           String
-  phone          String          @unique
-  pin            String
-  role           String          @default("PUBLICADOR")
-  monthlyGoal    Int             @default(0)
-  serviceGroup   String          @default("Grupo 1")
-  congregationId String
-  congregation   Congregation    @relation(fields: [congregationId], references: [id])
-  timeLogs       TimeLog[]
-  assignments    Assignment[]
-  monthlyReports MonthlyReport[]
-  createdAt      DateTime        @default(now())
+  id              String          @id @default(uuid())
+  name            String
+  phone           String
+  pin             String          @default("1234")
+  role            String          @default("PUBLICADOR") // PUBLICADOR | PIONEIRO_AUXILIAR | PIONEIRO_REGULAR | ANCIAO | DESENVOLVEDOR | ADMIN
+  monthlyGoal     Int             @default(0)
+  yearlyGoal      Int             @default(0)
+  canUseTimer     Boolean         @default(true)
+  canViewAllHours Boolean         @default(false)
+  canAssignParts  Boolean         @default(false)
+  serviceGroup    String
+  congregationId  String
+  congregation    Congregation    @relation(fields: [congregationId], references: [id], onDelete: Cascade)
+  timeLogs        TimeLog[]
+  monthlyReports  MonthlyReport[]
+  assignments     Assignment[]
+  createdAt       DateTime        @default(now())
 }
 
 model TimeLog {
@@ -78,10 +81,28 @@ model Territory {
   id             String       @id
   nome           String
   quadras        Int
-  status         String       @default("Disponível")
-  responsavel    String       @default("Livre")
+  status         String
+  responsavel    String
   lat            Float
   lng            Float
   congregationId String
-  congregation   Congregation @relation(fields: [congregationId], references: [id])
+  congregation   Congregation @relation(fields: [congregationId], references: [id], onDelete: Cascade)
+}
+
+model MidweekMeeting {
+  id            String   @id @default(uuid())
+  weekLabel     String
+  chairman      String
+  openingPrayer String
+  closingPrayer String
+  partsJson     String
+  createdAt     DateTime @default(now())
+}
+
+model CleaningSchedule {
+  id        String   @id @default(uuid())
+  weekLabel String
+  groupName String
+  notes     String?
+  createdAt DateTime @default(now())
 }
