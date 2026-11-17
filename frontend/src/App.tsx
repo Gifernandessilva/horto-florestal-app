@@ -1,9 +1,9 @@
-
 /* cspell:disable */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import L from 'leaflet';
 
 type Tab = 'inicio' | 'escalas' | 'territorios' | 'relatorios';
+type ScheduleSubTab = 'meio_de_semana' | 'fim_de_semana' | 'servico';
 
 interface TimeSession {
   id: string;
@@ -39,6 +39,30 @@ interface AssignmentItem {
   };
 }
 
+interface MidweekPart {
+  section: string;
+  title: string;
+  description?: string;
+  assignee: string;
+  assistant?: string;
+}
+
+interface MidweekMeetingItem {
+  id: string;
+  weekLabel: string;
+  chairman: string;
+  openingPrayer: string;
+  closingPrayer: string;
+  partsJson: string;
+}
+
+interface CleaningScheduleItem {
+  id: string;
+  weekLabel: string;
+  groupName: string;
+  notes?: string | null;
+}
+
 interface MemberProfile {
   id: string;
   name: string;
@@ -67,6 +91,15 @@ interface TerritoryItem {
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 const MES_ATUAL = '2026-11';
+const DIAS_NOVEMBRO = 30;
+
+const HORAS_BASE_POR_DIA: Record<number, number> = {
+  2: 2,
+  5: 4.0,
+  9: 3.0,
+  12: 4.5,
+  16: 3.0,
+};
 
 function isElderOrDev(user: MemberProfile | null) {
   if (!user) return false;
@@ -76,6 +109,15 @@ function isElderOrDev(user: MemberProfile | null) {
 function canMemberUseTimer(user: MemberProfile | null) {
   if (!user) return false;
   return isElderOrDev(user) || user.canUseTimer === true;
+}
+
+function parseParts(partsJson: string): MidweekPart[] {
+  try {
+    const parsed = JSON.parse(partsJson);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function lerCronometroDoUtilizador(userId: string) {
@@ -226,8 +268,13 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
   const [territorios, setTerritorios] = useState<TerritoryItem[]>([]);
   const [escalas, setEscalas] = useState<AssignmentItem[]>([]);
+  const [midweekMeetings, setMidweekMeetings] = useState<MidweekMeetingItem[]>([]);
+  const [cleaningSchedules, setCleaningSchedules] = useState<CleaningScheduleItem[]>([]);
 
   const [activeTab, setActiveTab] = useState<Tab>('inicio');
+  const [scheduleSubTab, setScheduleSubTab] = useState<ScheduleSubTab>('meio_de_semana');
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState<number>(0);
+
   const [darkMode, setDarkMode] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [loadingDb, setLoadingDb] = useState(true);
@@ -242,16 +289,78 @@ export default function App() {
   const [newGoal, setNewGoal] = useState(0);
   const [newGroup, setNewGroup] = useState('Grupo 1 - Horto');
 
-  // Estados para remoção protegida por senha (apenas Anciãos e Desenvolvedores)
   const [memberToDeleteId, setMemberToDeleteId] = useState<string | null>(null);
   const [deletePassword, setDeletePassword] = useState('');
   const [deletingMember, setDeletingMember] = useState(false);
+
+  const [myServiceUnlockedIds, setMyServiceUnlockedIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('@horto:my_service_unlocked_ids') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [diaSelecionadoCalendario, setDiaSelecionadoCalendario] = useState<number>(2);
+
+  const [horasAjustadasPorMembro, setHorasAjustadasPorMembro] = useState<
+    Record<string, Record<number, number>>
+  >(() => {
+    try {
+      return JSON.parse(localStorage.getItem('@horto:calendar_day_overrides') || '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [horasDiaInput, setHorasDiaInput] = useState('');
 
   const [showNewAssignmentForm, setShowNewAssignmentForm] = useState(false);
   const [novoCargo, setNovoCargo] = useState('');
   const [novaDataEscala, setNovaDataEscala] = useState('');
   const [novoLocalEscala, setNovoLocalEscala] = useState('Salão Principal');
   const [membroDesignadoId, setMembroDesignadoId] = useState('');
+
+  const [showNewMidweekForm, setShowNewMidweekForm] = useState(false);
+  const [mwWeekLabel, setMwWeekLabel] = useState('16–22 de nov. de 2026');
+  const [mwMeetingDay, setMwMeetingDay] = useState('quarta-feira, 18 de novembro de 2026');
+  const [mwBibleReading, setMwBibleReading] = useState('LAMENTAÇÕES 1-2');
+  const [mwOpeningSong, setMwOpeningSong] = useState('Cântico 28: Quem pode ser amigo de Jeová?');
+  const [mwChairman, setMwChairman] = useState('');
+  const [mwOpeningPrayer, setMwOpeningPrayer] = useState('');
+  const [mwClosingPrayer, setMwClosingPrayer] = useState('');
+  const [mwTreasures1, setMwTreasures1] = useState('1. Uma reação compreensível diante de uma terrível perda (10 min)');
+  const [mwTreasures1Assignee, setMwTreasures1Assignee] = useState('');
+  const [mwTreasures2, setMwTreasures2] = useState('2. Joias espirituais (10 min)');
+  const [mwTreasures2Assignee, setMwTreasures2Assignee] = useState('');
+  const [mwTreasures3, setMwTreasures3] = useState('3. Leitura da Bíblia (4 min) Lam. 1:8-18 (th lição 10)');
+  const [mwTreasures3Assignee, setMwTreasures3Assignee] = useState('');
+
+  const [mwMinistry4, setMwMinistry4] = useState('4. Iniciando conversas (3 min)');
+  const [mwMinistry4Desc, setMwMinistry4Desc] = useState('TESTEMUNHO INFORMAL. Comece uma conversa amigável com uma pessoa...');
+  const [mwMinistry4Assignee, setMwMinistry4Assignee] = useState('');
+  const [mwMinistry4Assistant, setMwMinistry4Assistant] = useState('');
+
+  const [mwMinistry5, setMwMinistry5] = useState('5. Cultivando o interesse (4 min)');
+  const [mwMinistry5Desc, setMwMinistry5Desc] = useState('TESTEMUNHO PÚBLICO. Use um vídeo do Kit de Ensino e ofereça um estudo bíblico.');
+  const [mwMinistry5Assignee, setMwMinistry5Assignee] = useState('');
+  const [mwMinistry5Assistant, setMwMinistry5Assistant] = useState('');
+
+  const [mwMinistry6, setMwMinistry6] = useState('6. O que você diria? (5 min) Consideração.');
+  const [mwMinistry6Desc, setMwMinistry6Desc] = useState('DE CASA EM CASA. Faça um resumo da lmd lição 1 ponto 4b. Mostre a imagem. Depois, pergunte');
+  const [mwMinistry6Assignee, setMwMinistry6Assignee] = useState('');
+  const [mwMinistry6Assistant, setMwMinistry6Assistant] = useState('');
+
+  const [mwLivingSong, setMwLivingSong] = useState('Cântico 90: “Encorajando uns aos outros”');
+  const [mwLiving7, setMwLiving7] = useState('7. Não se esqueça de nossos irmãos e irmãs inativos (15 min) Consideração.');
+  const [mwLiving7Assignee, setMwLiving7Assignee] = useState('');
+  const [mwLiving8, setMwLiving8] = useState('8. Estudo bíblico de congregação (30 min)');
+  const [mwLiving8Desc, setMwLiving8Desc] = useState('wcg cap. 17');
+  const [mwLiving8Assignee, setMwLiving8Assignee] = useState('');
+  const [mwLiving8Assistant, setMwLiving8Assistant] = useState('');
+
+  const [showNewCleaningForm, setShowNewCleaningForm] = useState(false);
+  const [cleanWeekLabel, setCleanWeekLabel] = useState('');
+  const [cleanGroupName, setCleanGroupName] = useState('Grupo 1 - Horto');
+  const [cleanNotes, setCleanNotes] = useState('');
 
   const [observacoesRelatorio, setObservacoesRelatorio] = useState('');
 
@@ -268,6 +377,7 @@ export default function App() {
     setCurrentUser(u);
     setMemberToDeleteId(null);
     setDeletePassword('');
+    setHorasDiaInput('');
     if (u) {
       localStorage.setItem('@horto:current_user_id', u.id);
       if (!canMemberUseTimer(u)) {
@@ -286,10 +396,12 @@ export default function App() {
 
   const carregarDadosDoBanco = useCallback(async () => {
     try {
-      const [resMembers, resTerritories, resAssignments] = await Promise.all([
+      const [resMembers, resTerritories, resAssignments, resMidweek, resCleaning] = await Promise.all([
         fetch(`${API_URL}/members`),
         fetch(`${API_URL}/territories`),
         fetch(`${API_URL}/assignments`),
+        fetch(`${API_URL}/midweek-meetings`),
+        fetch(`${API_URL}/cleaning-schedules`),
       ]);
 
       if (resMembers.ok && resTerritories.ok && resAssignments.ok) {
@@ -300,6 +412,13 @@ export default function App() {
         setMembers(listaMembros);
         setTerritorios(listaTerritorios);
         setEscalas(listaEscalas);
+
+        if (resMidweek.ok) {
+          setMidweekMeetings(await resMidweek.json());
+        }
+        if (resCleaning.ok) {
+          setCleaningSchedules(await resCleaning.json());
+        }
 
         if (listaMembros.length > 0 && !membroDesignadoId) {
           setMembroDesignadoId(listaMembros[0].id);
@@ -347,6 +466,52 @@ export default function App() {
   const podeVerTodasHoras = Boolean(currentUser && (currentUser.canViewAllHours || isElderOrDev(currentUser)));
   const podeEnviarDesignacoes = Boolean(currentUser && (currentUser.canAssignParts || isElderOrDev(currentUser)));
   const podeGerirPermissoes = isElderOrDev(currentUser);
+  const podeVerMyService = Boolean(
+    currentUser && (isElderOrDev(currentUser) || myServiceUnlockedIds.includes(currentUser.id))
+  );
+
+  const alternarMyServiceMembro = (memberId: string) => {
+    if (!podeGerirPermissoes) return;
+    setMyServiceUnlockedIds((prev) => {
+      const exists = prev.includes(memberId);
+      const updated = exists ? prev.filter((id) => id !== memberId) : [...prev, memberId];
+      localStorage.setItem('@horto:my_service_unlocked_ids', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const salvarHorasDoDiaNoCalendario = (dia: number, novoValorHoras: number) => {
+    if (!currentUser) return;
+    const valorLimpo = Math.max(0, +novoValorHoras.toFixed(2));
+    setHorasAjustadasPorMembro((prev) => {
+      const atualMembro = prev[currentUser.id] || {};
+      const atualizado = {
+        ...prev,
+        [currentUser.id]: {
+          ...atualMembro,
+          [dia]: valorLimpo,
+        },
+      };
+      localStorage.setItem('@horto:calendar_day_overrides', JSON.stringify(atualizado));
+      return atualizado;
+    });
+  };
+
+  const aplicarHorasDigitadasNoDia = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !podeVerMyService) return;
+    const parsed = Number(horasDiaInput.replace(',', '.'));
+    if (Number.isNaN(parsed) || parsed < 0) {
+      alert('Digite um número válido (ex: 1 ou 1.5).');
+      return;
+    }
+    salvarHorasDoDiaNoCalendario(diaSelecionadoCalendario, parsed);
+    setHorasDiaInput('');
+  };
+
+  const removerHorasDoDiaNoCalendario = (dia: number) => {
+    salvarHorasDoDiaNoCalendario(dia, 0);
+  };
 
   useEffect(() => {
     if (!currentUser || !podeAtivarCronometro) return;
@@ -385,6 +550,31 @@ export default function App() {
       return;
     }
     setIsRunning(!isRunning);
+  };
+
+  const zerarCronometroAtual = () => {
+    if (!currentUser || !podeAtivarCronometro) return;
+    setIsRunning(false);
+    setElapsedSeconds(0);
+    localStorage.removeItem(`@horto:timer_${currentUser.id}`);
+  };
+
+  const removerSessaoGravada = async (sessionId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/timelogs/${sessionId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.error) {
+          alert(`⚠️ ${data.error}`);
+          return;
+        }
+        await carregarDadosDoBanco();
+      }
+    } catch {
+      alert('Erro ao remover sessão do banco.');
+    }
   };
 
   const finalizarSessao = async () => {
@@ -505,6 +695,150 @@ export default function App() {
       }
     } catch {
       alert('Erro ao criar nova designação.');
+    }
+  };
+
+  const criarReuniaoMeioSemana = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!podeEnviarDesignacoes || !mwWeekLabel.trim() || !mwChairman.trim()) return;
+
+    const parts: MidweekPart[] = [
+      {
+        section: 'Cabecalho',
+        title: `${mwMeetingDay.trim()} • ${mwBibleReading.trim()}`,
+        description: mwOpeningSong.trim(),
+        assignee: '',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: mwTreasures1.trim(),
+        assignee: mwTreasures1Assignee.trim() || mwChairman.trim(),
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: mwTreasures2.trim(),
+        assignee: mwTreasures2Assignee.trim() || mwChairman.trim(),
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: mwTreasures3.trim(),
+        assignee: mwTreasures3Assignee.trim() || 'A designar',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: mwMinistry4.trim(),
+        description: mwMinistry4Desc.trim(),
+        assignee: mwMinistry4Assignee.trim() || 'A designar',
+        assistant: mwMinistry4Assistant.trim() || undefined,
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: mwMinistry5.trim(),
+        description: mwMinistry5Desc.trim(),
+        assignee: mwMinistry5Assignee.trim() || 'A designar',
+        assistant: mwMinistry5Assistant.trim() || undefined,
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: mwMinistry6.trim(),
+        description: mwMinistry6Desc.trim(),
+        assignee: mwMinistry6Assignee.trim() || 'A designar',
+        assistant: mwMinistry6Assistant.trim() || undefined,
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: mwLivingSong.trim(),
+        assignee: '',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: mwLiving7.trim(),
+        assignee: mwLiving7Assignee.trim() || mwChairman.trim(),
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: mwLiving8.trim(),
+        description: mwLiving8Desc.trim(),
+        assignee: mwLiving8Assignee.trim() || mwChairman.trim(),
+        assistant: mwLiving8Assistant.trim() || undefined,
+      },
+    ];
+
+    try {
+      const res = await fetch(`${API_URL}/midweek-meetings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          weekLabel: mwWeekLabel.trim(),
+          chairman: mwChairman.trim(),
+          openingPrayer: mwOpeningPrayer.trim() || mwChairman.trim(),
+          closingPrayer: mwClosingPrayer.trim() || mwChairman.trim(),
+          parts,
+          actorId: currentUser?.id,
+        }),
+      });
+
+      if (res.ok) {
+        setShowNewMidweekForm(false);
+        setSelectedWeekIndex(0);
+        await carregarDadosDoBanco();
+        alert('📖 Programação do meio de semana salva no PostgreSQL!');
+      }
+    } catch {
+      alert('Erro ao salvar reunião do meio de semana.');
+    }
+  };
+
+  const removerReuniaoMeioSemana = async (id: string) => {
+    if (!podeEnviarDesignacoes) return;
+    try {
+      const res = await fetch(`${API_URL}/midweek-meetings/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setSelectedWeekIndex(0);
+        await carregarDadosDoBanco();
+      }
+    } catch {
+      alert('Erro ao remover programação do meio de semana.');
+    }
+  };
+
+  const criarEscalaLimpeza = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!podeEnviarDesignacoes || !cleanWeekLabel.trim() || !cleanGroupName.trim()) return;
+
+    try {
+      const res = await fetch(`${API_URL}/cleaning-schedules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          weekLabel: cleanWeekLabel.trim(),
+          groupName: cleanGroupName.trim(),
+          notes: cleanNotes.trim() || null,
+          actorId: currentUser?.id,
+        }),
+      });
+
+      if (res.ok) {
+        setCleanWeekLabel('');
+        setCleanNotes('');
+        setShowNewCleaningForm(false);
+        await carregarDadosDoBanco();
+        alert('🧹 Escala de limpeza salva no PostgreSQL!');
+      }
+    } catch {
+      alert('Erro ao salvar escala de limpeza.');
+    }
+  };
+
+  const removerEscalaLimpeza = async (id: string) => {
+    if (!podeEnviarDesignacoes) return;
+    try {
+      const res = await fetch(`${API_URL}/cleaning-schedules/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        await carregarDadosDoBanco();
+      }
+    } catch {
+      alert('Erro ao remover escala de limpeza.');
     }
   };
 
@@ -780,12 +1114,65 @@ export default function App() {
 
   const logsDoBanco = currentUser.timeLogs || [];
   const segundosNoBanco = logsDoBanco.reduce((acc, item) => acc + item.durationSec, 0);
-  const horasSalvas = +(18 + segundosNoBanco / 3600).toFixed(2);
+  const overridesDoMembro = horasAjustadasPorMembro[currentUser.id] || {};
+
+  const resumoPorDia: Record<number, { horas: number; revisitas: number; estudos: number; sessoes: number }> = {};
+  for (let d = 1; d <= DIAS_NOVEMBRO; d++) {
+    const temOverride = overridesDoMembro[d] !== undefined;
+    resumoPorDia[d] = {
+      horas: temOverride ? overridesDoMembro[d] : HORAS_BASE_POR_DIA[d] || 0,
+      revisitas: 0,
+      estudos: 0,
+      sessoes: temOverride ? (overridesDoMembro[d] > 0 ? 1 : 0) : HORAS_BASE_POR_DIA[d] ? 1 : 0,
+    };
+  }
+
+  logsDoBanco.forEach((l) => {
+    const match = l.date.match(/^(\d{2})\/11/);
+    if (match) {
+      const dia = Number(match[1]);
+      if (dia >= 1 && dia <= DIAS_NOVEMBRO && overridesDoMembro[dia] === undefined) {
+        resumoPorDia[dia].horas = +(resumoPorDia[dia].horas + l.durationSec / 3600).toFixed(2);
+        resumoPorDia[dia].revisitas += l.revisitas || 0;
+        resumoPorDia[dia].estudos += l.estudos || 0;
+        resumoPorDia[dia].sessoes += 1;
+      }
+    }
+  });
+
+  const totalHorasCalendario = +Object.values(resumoPorDia)
+    .reduce((acc, item) => acc + item.horas, 0)
+    .toFixed(2);
+
+  const horasSalvas = +(totalHorasCalendario + segundosNoBanco / 3600).toFixed(2);
   const metaMensal = currentUser.monthlyGoal || 50;
+  const metaAnual = currentUser.yearlyGoal || (metaMensal > 0 ? metaMensal * 12 : 600);
+
+  const horasRelatoriosAnteriores = (currentUser.monthlyReports || [])
+    .filter((r) => r.monthYear !== MES_ATUAL)
+    .reduce((acc, r) => acc + r.totalHours, 0);
+  const horasAnoAcumuladas = +(horasRelatoriosAnteriores + horasSalvas).toFixed(2);
+  const faltamNoMes = Math.max(0, +(metaMensal - horasSalvas).toFixed(2));
+  const faltamNoAno = Math.max(0, +(metaAnual - horasAnoAcumuladas).toFixed(2));
   const progressoPercentual = Math.min(Math.round((horasSalvas / metaMensal) * 100), 100);
+
+  const infoDiaSelecionado = resumoPorDia[diaSelecionadoCalendario] || {
+    horas: 0,
+    revisitas: 0,
+    estudos: 0,
+    sessoes: 0,
+  };
 
   const meuRelatorioMes = (currentUser.monthlyReports || []).find((r) => r.monthYear === MES_ATUAL);
   const minhaProximaEscala = escalas.find((e) => e.memberId === currentUser.id) || escalas[0];
+
+  const semanaSelecionada =
+    midweekMeetings[selectedWeekIndex] || midweekMeetings[0] || null;
+  const partesSemana = semanaSelecionada ? parseParts(semanaSelecionada.partsJson) : [];
+  const parteCabecalho = partesSemana.find((p) => p.section === 'Cabecalho');
+  const partesTesouros = partesSemana.filter((p) => p.section === 'TESOUROS DA PALAVRA DE DEUS');
+  const partesMinisterio = partesSemana.filter((p) => p.section === 'FAÇA SEU MELHOR NO MINISTÉRIO');
+  const partesVidaCrista = partesSemana.filter((p) => p.section === 'NOSSA VIDA CRISTÃ');
 
   return (
     <div className={darkMode ? 'bg-[#121A13] text-[#EAECE9] min-h-screen' : 'bg-[#2C3A2B] text-white min-h-screen'}>
@@ -881,20 +1268,31 @@ export default function App() {
                 </div>
 
                 {podeAtivarCronometro ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={alternarCronometro}
-                      className="py-3 px-4 rounded-xl font-bold uppercase text-xs tracking-wider bg-[#466044] hover:bg-[#537150] text-white cursor-pointer"
-                    >
-                      {isRunning ? '⏸ Pausar' : '▶ Iniciar'}
-                    </button>
-                    <button
-                      onClick={finalizarSessao}
-                      disabled={elapsedSeconds === 0}
-                      className="py-3 px-4 rounded-xl font-bold uppercase text-xs tracking-wider bg-[#EAECE9] text-[#1A261C] disabled:opacity-40 cursor-pointer"
-                    >
-                      ⏹ Salvar
-                    </button>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={alternarCronometro}
+                        className="py-3 px-4 rounded-xl font-bold uppercase text-xs tracking-wider bg-[#466044] hover:bg-[#537150] text-white cursor-pointer"
+                      >
+                        {isRunning ? '⏸ Pausar' : '▶ Iniciar'}
+                      </button>
+                      <button
+                        onClick={finalizarSessao}
+                        disabled={elapsedSeconds === 0}
+                        className="py-3 px-4 rounded-xl font-bold uppercase text-xs tracking-wider bg-[#EAECE9] text-[#1A261C] disabled:opacity-40 cursor-pointer"
+                      >
+                        ⏹ Salvar
+                      </button>
+                    </div>
+                    {elapsedSeconds > 0 && (
+                      <button
+                        type="button"
+                        onClick={zerarCronometroAtual}
+                        className="w-full py-2 rounded-xl font-semibold text-xs bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-800/70 cursor-pointer"
+                      >
+                        ↺ Zerar Tempo do Relógio
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-2xl p-3.5 bg-[#121A13]/60 border border-[#2F4231] text-left">
@@ -923,15 +1321,115 @@ export default function App() {
                 </div>
               </div>
 
-              {currentUser.monthlyGoal > 0 && (
-                <div className={`rounded-2xl p-3.5 border ${cardStyle}`}>
-                  <div className="flex justify-between text-xs font-bold mb-1.5">
-                    <span>Meta Mensal ({currentUser.role.replace('_', ' ')})</span>
-                    <span>{horasSalvas}h / {metaMensal}h ({progressoPercentual}%)</span>
+              {podeVerMyService ? (
+                <div className={`rounded-2xl p-4 border space-y-3 ${cardStyle}`}>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-[10px] uppercase tracking-widest text-emerald-400 font-extrabold block">
+                        My Service • Metas e Calendário
+                      </span>
+                      <strong className="text-xs">
+                        {currentUser.role.replace('_', ' ')} • Meta Mensal {metaMensal}h / Anual {metaAnual}h
+                      </strong>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 font-bold">
+                      {progressoPercentual}%
+                    </span>
                   </div>
-                  <div className="w-full h-2.5 bg-[#101711] rounded-full overflow-hidden">
-                    <div className="h-full bg-[#648C61]" style={{ width: `${progressoPercentual}%` }} />
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2.5 rounded-xl bg-[#121A13]/50 border border-[#2F4231]">
+                      <span className="text-[10px] opacity-75 block">Faltam no Mês</span>
+                      <strong className="text-sm text-amber-300">{faltamNoMes}h</strong>
+                      <span className="text-[10px] opacity-70 block">Feitas: {horasSalvas}h / {metaMensal}h</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-[#121A13]/50 border border-[#2F4231]">
+                      <span className="text-[10px] opacity-75 block">Faltam no Ano</span>
+                      <strong className="text-sm text-emerald-300">{faltamNoAno}h</strong>
+                      <span className="text-[10px] opacity-70 block">Feitas: {horasAnoAcumuladas}h / {metaAnual}h</span>
+                    </div>
                   </div>
+
+                  <div>
+                    <div className="flex justify-between items-center text-[11px] mb-2">
+                      <span className="font-bold">Calendário • Novembro 2026</span>
+                      <span className="text-[#8FA38B]">Dia {diaSelecionadoCalendario}/11</span>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
+                      {Array.from({ length: DIAS_NOVEMBRO }, (_, idx) => {
+                        const dia = idx + 1;
+                        const infoDia = resumoPorDia[dia];
+                        const temHoras = infoDia.horas > 0;
+                        const selecionado = diaSelecionadoCalendario === dia;
+                        return (
+                          <button
+                            key={dia}
+                            onClick={() => setDiaSelecionadoCalendario(dia)}
+                            className={`py-1 px-0.5 rounded-lg font-semibold transition cursor-pointer flex flex-col items-center leading-tight ${
+                              selecionado
+                                ? 'bg-[#466044] text-white ring-1 ring-emerald-300'
+                                : temHoras
+                                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/60'
+                                : 'bg-[#121A13]/40 text-[#A5B8A3] hover:bg-[#233325]'
+                            }`}
+                          >
+                            <span>{dia}</span>
+                            <span className="text-[9px] opacity-90">
+                              {temHoras ? `${infoDia.horas}h` : '-'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="text-[11px] opacity-90 mt-2 bg-[#121A13]/50 border border-[#2F4231] px-3 py-2 rounded-xl flex justify-between items-center gap-2">
+                      <div>
+                        <strong className="block text-white">
+                          Dia {diaSelecionadoCalendario}/11 • {infoDiaSelecionado.horas}h marcadas
+                        </strong>
+                        <span className="text-[10px] opacity-75">
+                          Toque para ajustar ou remover as horas deste dia
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {infoDiaSelecionado.horas > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => removerHorasDoDiaNoCalendario(diaSelecionadoCalendario)}
+                            className="px-2 py-1 rounded-lg bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-800/70 text-[10px] font-bold cursor-pointer"
+                          >
+                            ✕ Remover dia
+                          </button>
+                        )}
+                        <span className="text-xs font-extrabold text-emerald-300">
+                          {infoDiaSelecionado.horas}h
+                        </span>
+                      </div>
+                    </div>
+
+                    <form onSubmit={aplicarHorasDigitadasNoDia} className="mt-2.5 flex gap-1.5">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder={`Horas no dia ${diaSelecionadoCalendario}/11 (ex: 1 ou 1.5)`}
+                        value={horasDiaInput}
+                        onChange={(e) => setHorasDiaInput(e.target.value)}
+                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#121A13] border border-[#3A523D] text-white text-xs"
+                      />
+                      <button
+                        type="submit"
+                        className="px-3 py-1.5 rounded-lg bg-[#466044] hover:bg-[#537150] text-white text-xs font-bold cursor-pointer"
+                      >
+                        Salvar dia
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              ) : (
+                <div className={`rounded-2xl p-3.5 border text-xs opacity-80 ${cardStyle}`}>
+                  🔒 A visão de calendário e horas restantes (estilo My Service) é liberada por Anciãos ou Desenvolvedores.
                 </div>
               )}
 
@@ -989,117 +1487,509 @@ export default function App() {
           )}
 
           {activeTab === 'escalas' && (
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xs uppercase tracking-widest text-[#8FA38B] font-bold">
-                  Escalas e Designações ({escalas.length})
-                </h2>
-                {podeEnviarDesignacoes ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <select
+                  value={selectedWeekIndex}
+                  onChange={(e) => setSelectedWeekIndex(Number(e.target.value))}
+                  className="bg-[#1A261C] border border-[#2F4231] text-white text-xs font-bold px-3 py-2 rounded-xl flex-1 cursor-pointer"
+                >
+                  {midweekMeetings.length > 0 ? (
+                    midweekMeetings.map((m, idx) => (
+                      <option key={m.id} value={idx}>
+                        {m.weekLabel}
+                      </option>
+                    ))
+                  ) : (
+                    <option value={0}>16–22 de nov. de 2026</option>
+                  )}
+                </select>
+
+                {podeEnviarDesignacoes && (
                   <button
-                    onClick={() => setShowNewAssignmentForm(!showNewAssignmentForm)}
-                    className="text-[11px] bg-[#466044] hover:bg-[#537150] text-white px-2.5 py-1 rounded-lg font-bold cursor-pointer"
+                    type="button"
+                    onClick={() => setShowNewMidweekForm(!showNewMidweekForm)}
+                    className="text-[11px] bg-[#466044] hover:bg-[#537150] text-white px-3 py-2 rounded-xl font-bold cursor-pointer shrink-0"
                   >
-                    {showNewAssignmentForm ? '✕ Fechar' : '+ Nova Designação'}
+                    {showNewMidweekForm ? '✕ Fechar' : '+ Semana'}
                   </button>
-                ) : (
-                  <span className="text-[10px] opacity-70">Somente autorizados enviam partes</span>
                 )}
               </div>
 
-              {showNewAssignmentForm && podeEnviarDesignacoes && (
-                <form onSubmit={criarNovaEscalaNoBanco} className={`rounded-2xl p-4 border space-y-2.5 text-xs ${cardStyle}`}>
-                  <h3 className="font-bold text-sm text-emerald-400">Nova Escala / Discurso / Parte</h3>
-                  <div>
-                    <label className="block mb-1 opacity-80">Discurso, Parte ou Função:</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ex: Discurso Público • Fé nas Promessas"
-                      value={novoCargo}
-                      onChange={(e) => setNovoCargo(e.target.value)}
-                      className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
-                    />
-                  </div>
+              <div className="grid grid-cols-3 border-b border-[#2F4231] text-[11px] font-extrabold uppercase tracking-wider">
+                <button
+                  type="button"
+                  onClick={() => setScheduleSubTab('meio_de_semana')}
+                  className={`py-2.5 text-center border-b-2 transition cursor-pointer ${
+                    scheduleSubTab === 'meio_de_semana'
+                      ? 'border-[#C89B3C] text-white'
+                      : 'border-transparent text-[#8FA38B]'
+                  }`}
+                >
+                  Meio de Semana
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleSubTab('fim_de_semana')}
+                  className={`py-2.5 text-center border-b-2 transition cursor-pointer ${
+                    scheduleSubTab === 'fim_de_semana'
+                      ? 'border-[#C89B3C] text-white'
+                      : 'border-transparent text-[#8FA38B]'
+                  }`}
+                >
+                  Fim de Semana
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleSubTab('servico')}
+                  className={`py-2.5 text-center border-b-2 transition cursor-pointer ${
+                    scheduleSubTab === 'servico'
+                      ? 'border-[#C89B3C] text-white'
+                      : 'border-transparent text-[#8FA38B]'
+                  }`}
+                >
+                  Serviço
+                </button>
+              </div>
+
+              {showNewMidweekForm && podeEnviarDesignacoes && (
+                <form onSubmit={criarReuniaoMeioSemana} className={`rounded-2xl p-4 border space-y-2.5 text-xs ${cardStyle}`}>
+                  <h3 className="font-bold text-sm text-emerald-400">Nova Semana • Meio de Semana</h3>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block mb-1 opacity-80">Dia e Horário:</label>
+                      <label className="block mb-1 opacity-80">Intervalo da Semana:</label>
                       <input
                         type="text"
                         required
-                        placeholder="Ex: Quinta, 26 Nov • 19:30"
-                        value={novaDataEscala}
-                        onChange={(e) => setNovaDataEscala(e.target.value)}
+                        value={mwWeekLabel}
+                        onChange={(e) => setMwWeekLabel(e.target.value)}
                         className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
                       />
                     </div>
                     <div>
-                      <label className="block mb-1 opacity-80">Local:</label>
+                      <label className="block mb-1 opacity-80">Data da Reunião:</label>
                       <input
                         type="text"
-                        value={novoLocalEscala}
-                        onChange={(e) => setNovoLocalEscala(e.target.value)}
+                        value={mwMeetingDay}
+                        onChange={(e) => setMwMeetingDay(e.target.value)}
                         className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block mb-1 opacity-80">Membro Designado:</label>
-                    <select
-                      value={membroDesignadoId}
-                      onChange={(e) => setMembroDesignadoId(e.target.value)}
-                      className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
-                    >
-                      {members.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} ({m.serviceGroup})
-                        </option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block mb-1 opacity-80">Leitura Bíblica:</label>
+                      <input
+                        type="text"
+                        value={mwBibleReading}
+                        onChange={(e) => setMwBibleReading(e.target.value)}
+                        className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-1 opacity-80">Cântico Inicial:</label>
+                      <input
+                        type="text"
+                        value={mwOpeningSong}
+                        onChange={(e) => setMwOpeningSong(e.target.value)}
+                        className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                      />
+                    </div>
                   </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block mb-1 opacity-80">Presidente:</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Nome"
+                        value={mwChairman}
+                        onChange={(e) => setMwChairman(e.target.value)}
+                        className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-1 opacity-80">Oração Inicial:</label>
+                      <input
+                        type="text"
+                        placeholder="Nome"
+                        value={mwOpeningPrayer}
+                        onChange={(e) => setMwOpeningPrayer(e.target.value)}
+                        className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-1 opacity-80">Oração Final:</label>
+                      <input
+                        type="text"
+                        placeholder="Nome"
+                        value={mwClosingPrayer}
+                        onChange={(e) => setMwClosingPrayer(e.target.value)}
+                        className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-bold uppercase text-[#3C7A89] block">Tesouros da Palavra de Deus</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="text" value={mwTreasures1} onChange={(e) => setMwTreasures1(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Designado parte 1" value={mwTreasures1Assignee} onChange={(e) => setMwTreasures1Assignee(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="text" value={mwTreasures2} onChange={(e) => setMwTreasures2(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Designado parte 2" value={mwTreasures2Assignee} onChange={(e) => setMwTreasures2Assignee(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="text" value={mwTreasures3} onChange={(e) => setMwTreasures3(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Leitor da Bíblia" value={mwTreasures3Assignee} onChange={(e) => setMwTreasures3Assignee(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-bold uppercase text-[#C89B3C] block">Faça Seu Melhor no Ministério</span>
+                    <div className="grid grid-cols-3 gap-2">
+                      <input type="text" value={mwMinistry4} onChange={(e) => setMwMinistry4(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Designado parte 4" value={mwMinistry4Assignee} onChange={(e) => setMwMinistry4Assignee(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Ajudante parte 4" value={mwMinistry4Assistant} onChange={(e) => setMwMinistry4Assistant(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
+                    <input type="text" placeholder="Instrução parte 4" value={mwMinistry4Desc} onChange={(e) => setMwMinistry4Desc(e.target.value)} className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <input type="text" value={mwMinistry5} onChange={(e) => setMwMinistry5(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Designado parte 5" value={mwMinistry5Assignee} onChange={(e) => setMwMinistry5Assignee(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Ajudante parte 5" value={mwMinistry5Assistant} onChange={(e) => setMwMinistry5Assistant(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
+                    <input type="text" placeholder="Instrução parte 5" value={mwMinistry5Desc} onChange={(e) => setMwMinistry5Desc(e.target.value)} className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <input type="text" value={mwMinistry6} onChange={(e) => setMwMinistry6(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Designado parte 6" value={mwMinistry6Assignee} onChange={(e) => setMwMinistry6Assignee(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Ajudante parte 6" value={mwMinistry6Assistant} onChange={(e) => setMwMinistry6Assistant(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
+                    <input type="text" placeholder="Instrução parte 6" value={mwMinistry6Desc} onChange={(e) => setMwMinistry6Desc(e.target.value)} className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                  </div>
+
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-bold uppercase text-[#9E322F] block">Nossa Vida Cristã</span>
+                    <input type="text" value={mwLivingSong} onChange={(e) => setMwLivingSong(e.target.value)} className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="text" value={mwLiving7} onChange={(e) => setMwLiving7(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Designado parte 7" value={mwLiving7Assignee} onChange={(e) => setMwLiving7Assignee(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <input type="text" value={mwLiving8} onChange={(e) => setMwLiving8(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Dirigente" value={mwLiving8Assignee} onChange={(e) => setMwLiving8Assignee(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Leitor" value={mwLiving8Assistant} onChange={(e) => setMwLiving8Assistant(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
+                    <input type="text" placeholder="Capítulo / referência estudo" value={mwLiving8Desc} onChange={(e) => setMwLiving8Desc(e.target.value)} className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                  </div>
+
                   <button
                     type="submit"
                     className="w-full py-2.5 rounded-lg font-bold bg-emerald-700 hover:bg-emerald-600 text-white cursor-pointer"
                   >
-                    💾 Salvar Designação no PostgreSQL
+                    💾 Salvar Programação no PostgreSQL
                   </button>
                 </form>
               )}
 
-              {escalas.map((item) => {
-                const nomeResponsavel = item.member?.name || 'Membro';
-                const isMine = item.memberId === currentUser.id;
-                const isConfirmado = item.status === 'confirmado';
-                return (
-                  <div key={item.id} className={`rounded-2xl p-4 border ${cardStyle} ${isMine ? 'ring-2 ring-[#648C61]' : ''}`}>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-bold text-base">{item.cargo}</h3>
-                        <p className="text-xs opacity-80">{item.data} • {item.local}</p>
-                        <p className="text-xs font-semibold text-[#8FA38B] mt-1">
-                          Designado: <strong className="text-white">{nomeResponsavel}</strong> {isMine && '(Você)'}
-                        </p>
+              {scheduleSubTab === 'meio_de_semana' && (
+                <div className="space-y-4">
+                  {semanaSelecionada ? (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <h2 className="text-xl font-extrabold text-white leading-snug">
+                            {parteCabecalho ? parteCabecalho.title.split(' • ')[0] : semanaSelecionada.weekLabel}
+                          </h2>
+                          {parteCabecalho && parteCabecalho.title.includes(' • ') && (
+                            <p className="text-sm font-extrabold uppercase tracking-wide text-white mt-0.5">
+                              {parteCabecalho.title.split(' • ')[1]}
+                            </p>
+                          )}
+                        </div>
+                        {podeEnviarDesignacoes && (
+                          <button
+                            type="button"
+                            onClick={() => removerReuniaoMeioSemana(semanaSelecionada.id)}
+                            className="px-2 py-1 rounded bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-800/70 text-[10px] font-bold cursor-pointer"
+                          >
+                            🗑️
+                          </button>
+                        )}
                       </div>
-                      <span
-                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                          isConfirmado
-                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
-                            : 'bg-yellow-950 text-yellow-300 border border-yellow-700'
-                        }`}
-                      >
-                        {item.status}
-                      </span>
+
+                      <div className="space-y-2.5 text-sm">
+                        <div>
+                          <span className="text-xs text-[#A5B8A3] block">Presidente</span>
+                          <strong className="text-white font-bold">{semanaSelecionada.chairman}</strong>
+                        </div>
+                        {parteCabecalho?.description && (
+                          <p className="text-sm font-semibold text-white">{parteCabecalho.description}</p>
+                        )}
+                        <div>
+                          <span className="text-xs text-[#A5B8A3] block">Oração inicial</span>
+                          <strong className="text-white font-bold">{semanaSelecionada.openingPrayer}</strong>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="bg-[#387482] text-white font-extrabold text-xs uppercase tracking-wider px-3 py-1.5">
+                          Tesouros da Palavra de Deus
+                        </div>
+                        {partesTesouros.map((item, idx) => (
+                          <div key={`t-${idx}`} className="space-y-0.5">
+                            <p className="text-sm font-semibold text-white leading-snug">{item.title}</p>
+                            {item.description && <p className="text-xs text-[#A5B8A3]">{item.description}</p>}
+                            {item.assignee && <p className="text-sm font-extrabold text-white">{item.assignee}</p>}
+                            {item.assistant && <p className="text-sm font-semibold text-[#EAECE9]">{item.assistant}</p>}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="bg-[#C89B3C] text-[#121A13] font-extrabold text-xs uppercase tracking-wider px-3 py-1.5">
+                          Faça Seu Melhor no Ministério
+                        </div>
+                        {partesMinisterio.map((item, idx) => (
+                          <div key={`m-${idx}`} className="space-y-0.5">
+                            <p className="text-sm font-semibold text-white leading-snug">{item.title}</p>
+                            {item.description && (
+                              <p className="text-xs text-[#A5B8A3] leading-relaxed">{item.description}</p>
+                            )}
+                            {item.assignee && <p className="text-sm font-extrabold text-white">{item.assignee}</p>}
+                            {item.assistant && <p className="text-sm font-semibold text-[#EAECE9]">{item.assistant}</p>}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="bg-[#9E322F] text-white font-extrabold text-xs uppercase tracking-wider px-3 py-1.5">
+                          Nossa Vida Cristã
+                        </div>
+                        {partesVidaCrista.map((item, idx) => (
+                          <div key={`v-${idx}`} className="space-y-0.5">
+                            <p className="text-sm font-semibold text-white leading-snug">{item.title}</p>
+                            {item.description && <p className="text-xs text-[#A5B8A3]">{item.description}</p>}
+                            {item.assignee && <p className="text-sm font-extrabold text-white">{item.assignee}</p>}
+                            {item.assistant && <p className="text-sm font-semibold text-[#EAECE9]">{item.assistant}</p>}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="pt-1 text-sm">
+                        <span className="text-xs text-[#A5B8A3] block">Oração final</span>
+                        <strong className="text-white font-bold">{semanaSelecionada.closingPrayer}</strong>
+                      </div>
                     </div>
-                    {isMine && !isConfirmado && (
+                  ) : (
+                    <div className={`rounded-2xl p-4 border text-xs opacity-80 ${cardStyle}`}>
+                      Nenhuma programação cadastrada ainda.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {scheduleSubTab === 'fim_de_semana' && (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xs uppercase tracking-widest text-[#8FA38B] font-bold">
+                      Designações e Escalas ({escalas.length})
+                    </h2>
+                    {podeEnviarDesignacoes && (
                       <button
-                        onClick={() => confirmarEscalaNoBanco(item.id)}
-                        className="mt-3 w-full py-2 rounded-lg text-xs font-bold bg-[#466044] hover:bg-[#537150] text-white cursor-pointer"
+                        onClick={() => setShowNewAssignmentForm(!showNewAssignmentForm)}
+                        className="text-[11px] bg-[#466044] hover:bg-[#537150] text-white px-2.5 py-1 rounded-lg font-bold cursor-pointer"
                       >
-                        ✓ Confirmar Minha Presença no BD
+                        {showNewAssignmentForm ? '✕ Fechar' : '+ Nova Designação'}
                       </button>
                     )}
                   </div>
-                );
-              })}
+
+                  {showNewAssignmentForm && podeEnviarDesignacoes && (
+                    <form onSubmit={criarNovaEscalaNoBanco} className={`rounded-2xl p-4 border space-y-2.5 text-xs ${cardStyle}`}>
+                      <h3 className="font-bold text-sm text-emerald-400">Nova Escala / Discurso / Parte</h3>
+                      <div>
+                        <label className="block mb-1 opacity-80">Discurso, Parte ou Função:</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ex: Discurso Público • Fé nas Promessas"
+                          value={novoCargo}
+                          onChange={(e) => setNovoCargo(e.target.value)}
+                          className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block mb-1 opacity-80">Dia e Horário:</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Ex: Domingo, 22 Nov • 10:00"
+                            value={novaDataEscala}
+                            onChange={(e) => setNovaDataEscala(e.target.value)}
+                            className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block mb-1 opacity-80">Local:</label>
+                          <input
+                            type="text"
+                            value={novoLocalEscala}
+                            onChange={(e) => setNovoLocalEscala(e.target.value)}
+                            className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block mb-1 opacity-80">Membro Designado:</label>
+                        <select
+                          value={membroDesignadoId}
+                          onChange={(e) => setMembroDesignadoId(e.target.value)}
+                          className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                        >
+                          {members.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} ({m.serviceGroup})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 rounded-lg font-bold bg-emerald-700 hover:bg-emerald-600 text-white cursor-pointer"
+                      >
+                        💾 Salvar Designação no PostgreSQL
+                      </button>
+                    </form>
+                  )}
+
+                  {escalas.map((item) => {
+                    const nomeResponsavel = item.member?.name || 'Membro';
+                    const isMine = item.memberId === currentUser.id;
+                    const isConfirmado = item.status === 'confirmado';
+                    return (
+                      <div key={item.id} className={`rounded-2xl p-4 border ${cardStyle} ${isMine ? 'ring-2 ring-[#648C61]' : ''}`}>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="font-bold text-base">{item.cargo}</h3>
+                            <p className="text-xs opacity-80">{item.data} • {item.local}</p>
+                            <p className="text-xs font-semibold text-[#8FA38B] mt-1">
+                              Designado: <strong className="text-white">{nomeResponsavel}</strong> {isMine && '(Você)'}
+                            </p>
+                          </div>
+                          <span
+                            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                              isConfirmado
+                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                                : 'bg-yellow-950 text-yellow-300 border border-yellow-700'
+                            }`}
+                          >
+                            {item.status}
+                          </span>
+                        </div>
+                        {isMine && !isConfirmado && (
+                          <button
+                            onClick={() => confirmarEscalaNoBanco(item.id)}
+                            className="mt-3 w-full py-2 rounded-lg text-xs font-bold bg-[#466044] hover:bg-[#537150] text-white cursor-pointer"
+                          >
+                            ✓ Confirmar Minha Presença no BD
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {scheduleSubTab === 'servico' && (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xs uppercase tracking-widest text-[#8FA38B] font-bold">
+                      Limpeza da Semana ({cleaningSchedules.length})
+                    </h2>
+                    {podeEnviarDesignacoes && (
+                      <button
+                        onClick={() => setShowNewCleaningForm(!showNewCleaningForm)}
+                        className="text-[11px] bg-[#466044] hover:bg-[#537150] text-white px-2.5 py-1 rounded-lg font-bold cursor-pointer"
+                      >
+                        {showNewCleaningForm ? '✕ Fechar' : '+ Limpeza'}
+                      </button>
+                    )}
+                  </div>
+
+                  {showNewCleaningForm && podeEnviarDesignacoes && (
+                    <form onSubmit={criarEscalaLimpeza} className={`rounded-2xl p-4 border space-y-2.5 text-xs ${cardStyle}`}>
+                      <h3 className="font-bold text-sm text-emerald-400">Nova Escala de Limpeza</h3>
+                      <div>
+                        <label className="block mb-1 opacity-80">Semana:</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ex: Semana de 23/11 a 29/11"
+                          value={cleanWeekLabel}
+                          onChange={(e) => setCleanWeekLabel(e.target.value)}
+                          className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block mb-1 opacity-80">Grupo Responsável:</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ex: Grupo 2 - Horto"
+                          value={cleanGroupName}
+                          onChange={(e) => setCleanGroupName(e.target.value)}
+                          className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block mb-1 opacity-80">Observações:</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Salão principal, banheiros e área externa"
+                          value={cleanNotes}
+                          onChange={(e) => setCleanNotes(e.target.value)}
+                          className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 rounded-lg font-bold bg-emerald-700 hover:bg-emerald-600 text-white cursor-pointer"
+                      >
+                        💾 Salvar Escala de Limpeza
+                      </button>
+                    </form>
+                  )}
+
+                  {cleaningSchedules.map((clean) => (
+                    <div key={clean.id} className={`rounded-2xl p-4 border ${cardStyle}`}>
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wider text-[#8FA38B] font-bold block">
+                            {clean.weekLabel}
+                          </span>
+                          <h3 className="font-bold text-sm text-white mt-0.5">🧹 {clean.groupName}</h3>
+                          {clean.notes && (
+                            <p className="text-xs opacity-80 mt-1">{clean.notes}</p>
+                          )}
+                        </div>
+                        {podeEnviarDesignacoes && (
+                          <button
+                            type="button"
+                            onClick={() => removerEscalaLimpeza(clean.id)}
+                            className="px-2 py-0.5 rounded bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-800/70 text-[10px] font-bold cursor-pointer"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1256,6 +2146,7 @@ export default function App() {
                         ? relatorioEntregue.totalHours
                         : +(18 + segMembro / 3600).toFixed(2);
                       const timerLiberado = canMemberUseTimer(m);
+                      const myServiceLiberado = isElderOrDev(m) || myServiceUnlockedIds.includes(m.id);
                       const confirmandoRemocao = memberToDeleteId === m.id;
 
                       return (
@@ -1290,6 +2181,17 @@ export default function App() {
                                   }`}
                                 >
                                   {timerLiberado ? '⏱️ Cronômetro Liberado' : '🔒 Liberar Cronômetro'}
+                                </button>
+
+                                <button
+                                  onClick={() => alternarMyServiceMembro(m.id)}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
+                                    myServiceLiberado
+                                      ? 'bg-emerald-900/70 text-emerald-200'
+                                      : 'bg-[#233325] text-[#A5B8A3]'
+                                  }`}
+                                >
+                                  {myServiceLiberado ? '📅 My Service Liberado' : '🔒 Liberar My Service'}
                                 </button>
 
                                 <button
@@ -1371,14 +2273,23 @@ export default function App() {
               </h3>
               <div className="space-y-2">
                 {logsDoBanco.map((s) => (
-                  <div key={s.id} className={`rounded-xl p-3 border flex justify-between items-center text-xs ${cardStyle}`}>
+                  <div key={s.id} className={`rounded-xl p-3 border flex justify-between items-center gap-2 text-xs ${cardStyle}`}>
                     <div>
                       <strong className="block">{s.date}</strong>
                       <span className="opacity-75">Duração: {formatTime(s.durationSec)}</span>
                     </div>
-                    <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 text-[10px]">
-                      🗄️ Salvo no Neon DB
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 text-[10px]">
+                        🗄️ Salvo no Neon DB
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removerSessaoGravada(s.id)}
+                        className="px-2 py-0.5 rounded bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-800/70 text-[10px] font-bold cursor-pointer"
+                      >
+                        🗑️ Remover
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

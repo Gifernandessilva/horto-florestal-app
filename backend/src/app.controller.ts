@@ -113,14 +113,68 @@ export class AppController implements OnModuleInit {
     if (totalReunioes === 0) {
       await prisma.midweekMeeting.create({
         data: {
-          weekLabel: '16 - 22 de Novembro',
-          chairman: 'Marcos Silva',
-          openingPrayer: 'Wdeyverson',
-          closingPrayer: 'Taylyson',
+          weekLabel: '16–22 de nov. de 2026',
+          chairman: 'Taylisson Mesquita',
+          openingPrayer: 'Taylisson Mesquita',
+          closingPrayer: 'Wdeyverson M. de Freitas',
           partsJson: JSON.stringify([
-            { section: 'Tesouros da Palavra de Deus', title: 'Discurso de 10 min • Joias Espirituais', assignee: 'Marcos Silva' },
-            { section: 'Faça Seu Melhor no Ministério', title: 'Primeira Conversa / Revisita', assignee: 'Ana Beatriz' },
-            { section: 'Nossa Vida Cristã', title: 'Estudo Bíblico de Congregação', assignee: 'Wdeyverson' },
+            {
+              section: 'Cabecalho',
+              title: 'quarta-feira, 18 de novembro de 2026 • LAMENTAÇÕES 1-2',
+              description: 'Cântico 28: Quem pode ser amigo de Jeová?',
+              assignee: '',
+            },
+            {
+              section: 'TESOUROS DA PALAVRA DE DEUS',
+              title: '1. Uma reação compreensível diante de uma terrível perda (10 min)',
+              assignee: 'Valderimar C. Monteiro',
+            },
+            {
+              section: 'TESOUROS DA PALAVRA DE DEUS',
+              title: '2. Joias espirituais (10 min)',
+              assignee: 'Djonata Bertolini',
+            },
+            {
+              section: 'TESOUROS DA PALAVRA DE DEUS',
+              title: '3. Leitura da Bíblia (4 min) Lam. 1:8-18 (th lição 10)',
+              assignee: 'James',
+            },
+            {
+              section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+              title: '4. Iniciando conversas (3 min)',
+              description: 'TESTEMUNHO INFORMAL. Comece uma conversa amigável com uma pessoa...',
+              assignee: 'Camila Medeiros',
+            },
+            {
+              section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+              title: '5. Cultivando o interesse (4 min)',
+              description: 'TESTEMUNHO PÚBLICO. Use um vídeo do Kit de Ensino e ofereça um estudo bíblico. (lmd lição 9 ponto 4)',
+              assignee: 'Camila Medeiros',
+              assistant: 'Léia',
+            },
+            {
+              section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+              title: '6. O que você diria? (5 min) Consideração.',
+              description: 'DE CASA EM CASA. Faça um resumo da lmd lição 1 ponto 4b. Mostre a imagem. Depois, pergunte',
+              assignee: 'Taylisson Mesquita',
+            },
+            {
+              section: 'NOSSA VIDA CRISTÃ',
+              title: 'Cântico 90: “Encorajando uns aos outros”',
+              assignee: '',
+            },
+            {
+              section: 'NOSSA VIDA CRISTÃ',
+              title: '7. Não se esqueça de nossos irmãos e irmãs inativos (15 min) Consideração.',
+              assignee: 'Aquiles A. de Oliveira',
+            },
+            {
+              section: 'NOSSA VIDA CRISTÃ',
+              title: '8. Estudo bíblico de congregação (30 min)',
+              description: 'wcg cap. 17',
+              assignee: 'Wdeyverson M. de Freitas',
+              assistant: 'Reginaldo',
+            },
           ]),
         },
       });
@@ -197,7 +251,6 @@ export class AppController implements OnModuleInit {
     });
   }
 
-  // Remover membro (exige actorId de Ancião/Desenvolvedor/Admin e senha PIN válida)
   @Delete('members/:id')
   async deleteMember(
     @Param('id') id: string,
@@ -287,6 +340,25 @@ export class AppController implements OnModuleInit {
     return { synced: true };
   }
 
+  @Delete('timelogs/:id')
+  async deleteTimeLog(@Param('id') id: string) {
+    const existing = await prisma.timeLog.findUnique({ where: { id } });
+    if (!existing) {
+      return { deleted: false, error: 'Sessão não encontrada.' };
+    }
+
+    await prisma.timeLog.delete({ where: { id } });
+    return { deleted: true, id };
+  }
+
+  @Delete('timelogs/member/:memberId')
+  async clearMemberTimeLogs(@Param('memberId') memberId: string) {
+    const result = await prisma.timeLog.deleteMany({
+      where: { memberId },
+    });
+    return { cleared: true, count: result.count };
+  }
+
   @Get('territories')
   async getTerritories() {
     return prisma.territory.findMany({ orderBy: { id: 'asc' } });
@@ -345,9 +417,87 @@ export class AppController implements OnModuleInit {
     return prisma.midweekMeeting.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
+  @Post('midweek-meetings')
+  async createMidweekMeeting(
+    @Body()
+    body: {
+      weekLabel: string;
+      chairman: string;
+      openingPrayer: string;
+      closingPrayer: string;
+      parts?: Array<{
+        section: string;
+        title: string;
+        description?: string;
+        assignee: string;
+        assistant?: string;
+      }>;
+      actorId?: string;
+    },
+  ) {
+    if (body.actorId) {
+      const actor = await prisma.member.findUnique({ where: { id: body.actorId } });
+      if (!actor || (!actor.canAssignParts && !isPrivilegedRole(actor.role))) {
+        return { error: 'Sem permissão para cadastrar reunião do meio de semana.' };
+      }
+    }
+
+    return prisma.midweekMeeting.create({
+      data: {
+        weekLabel: body.weekLabel,
+        chairman: body.chairman,
+        openingPrayer: body.openingPrayer,
+        closingPrayer: body.closingPrayer,
+        partsJson: JSON.stringify(body.parts || []),
+      },
+    });
+  }
+
+  @Delete('midweek-meetings/:id')
+  async deleteMidweekMeeting(@Param('id') id: string) {
+    const existing = await prisma.midweekMeeting.findUnique({ where: { id } });
+    if (!existing) return { deleted: false, error: 'Programação não encontrada.' };
+    await prisma.midweekMeeting.delete({ where: { id } });
+    return { deleted: true, id };
+  }
+
   @Get('cleaning-schedules')
   async getCleaningSchedules() {
     return prisma.cleaningSchedule.findMany({ orderBy: { createdAt: 'desc' } });
+  }
+
+  @Post('cleaning-schedules')
+  async createCleaningSchedule(
+    @Body()
+    body: {
+      weekLabel: string;
+      groupName: string;
+      notes?: string;
+      actorId?: string;
+    },
+  ) {
+    if (body.actorId) {
+      const actor = await prisma.member.findUnique({ where: { id: body.actorId } });
+      if (!actor || (!actor.canAssignParts && !isPrivilegedRole(actor.role))) {
+        return { error: 'Sem permissão para cadastrar escala de limpeza.' };
+      }
+    }
+
+    return prisma.cleaningSchedule.create({
+      data: {
+        weekLabel: body.weekLabel,
+        groupName: body.groupName,
+        notes: body.notes || null,
+      },
+    });
+  }
+
+  @Delete('cleaning-schedules/:id')
+  async deleteCleaningSchedule(@Param('id') id: string) {
+    const existing = await prisma.cleaningSchedule.findUnique({ where: { id } });
+    if (!existing) return { deleted: false, error: 'Escala de limpeza não encontrada.' };
+    await prisma.cleaningSchedule.delete({ where: { id } });
+    return { deleted: true, id };
   }
 
   @Post('reports/submit')
