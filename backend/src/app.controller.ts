@@ -1,5 +1,5 @@
 /* cspell:disable */
-import { Controller, Get, Post, Delete, Body, Param, Query, OnModuleInit } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -383,7 +383,14 @@ export class AppController implements OnModuleInit {
   @Post('assignments')
   async createAssignment(
     @Body()
-    body: { cargo: string; data: string; local?: string; memberId: string; actorId?: string },
+    body: {
+      cargo: string;
+      theme?: string;
+      data: string;
+      local?: string;
+      memberId: string;
+      actorId?: string;
+    },
   ) {
     if (body.actorId) {
       const actor = await prisma.member.findUnique({ where: { id: body.actorId } });
@@ -392,9 +399,13 @@ export class AppController implements OnModuleInit {
       }
     }
 
+    const cargoFinal = body.theme?.trim()
+      ? `${body.cargo.trim()} • Tema: ${body.theme.trim()}`
+      : body.cargo.trim();
+
     return prisma.assignment.create({
       data: {
-        cargo: body.cargo,
+        cargo: cargoFinal,
         data: body.data,
         local: body.local || 'Salão Principal',
         status: 'pendente',
@@ -402,6 +413,17 @@ export class AppController implements OnModuleInit {
       },
       include: { member: true },
     });
+  }
+
+  @Delete('assignments/:id')
+  async deleteAssignment(@Param('id') id: string) {
+    const existing = await prisma.assignment.findUnique({ where: { id } });
+    if (!existing) {
+      return { deleted: false, error: 'Designação não encontrada.' };
+    }
+
+    await prisma.assignment.delete({ where: { id } });
+    return { deleted: true, id };
   }
 
   @Post('assignments/:id/confirm')
@@ -443,6 +465,49 @@ export class AppController implements OnModuleInit {
     }
 
     return prisma.midweekMeeting.create({
+      data: {
+        weekLabel: body.weekLabel,
+        chairman: body.chairman,
+        openingPrayer: body.openingPrayer,
+        closingPrayer: body.closingPrayer,
+        partsJson: JSON.stringify(body.parts || []),
+      },
+    });
+  }
+
+  @Put('midweek-meetings/:id')
+  async updateMidweekMeeting(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      weekLabel: string;
+      chairman: string;
+      openingPrayer: string;
+      closingPrayer: string;
+      parts?: Array<{
+        section: string;
+        title: string;
+        description?: string;
+        assignee: string;
+        assistant?: string;
+      }>;
+      actorId?: string;
+    },
+  ) {
+    if (body.actorId) {
+      const actor = await prisma.member.findUnique({ where: { id: body.actorId } });
+      if (!actor || (!actor.canAssignParts && !isPrivilegedRole(actor.role))) {
+        return { error: 'Sem permissão para editar reunião do meio de semana.' };
+      }
+    }
+
+    const existing = await prisma.midweekMeeting.findUnique({ where: { id } });
+    if (!existing) {
+      return { error: 'Programação não encontrada.' };
+    }
+
+    return prisma.midweekMeeting.update({
+      where: { id },
       data: {
         weekLabel: body.weekLabel,
         chairman: body.chairman,

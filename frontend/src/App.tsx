@@ -93,6 +93,708 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 const MES_ATUAL = '2026-11';
 const DIAS_NOVEMBRO = 30;
 
+const SEMANAS_PADRAO_HOURGLASS: MidweekMeetingItem[] = [
+  {
+    id: 'preset-2-8-nov',
+    weekLabel: '2–8 de nov. de 2026',
+    chairman: 'Marcos Silva',
+    openingPrayer: 'Wdeyverson M. de Freitas',
+    closingPrayer: 'Taylisson Mesquita',
+    partsJson: JSON.stringify([
+      {
+        section: 'Cabecalho',
+        title: 'quarta-feira, 4 de novembro de 2026 • JEREMIAS 50-51',
+        description: 'Cântico 20: Você vai dar a eles o que precisam',
+        assignee: 'Cântico 54: “Este é o caminho”',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '1. Jeová humilha os orgulhosos (10 min)',
+        assignee: 'Marcos Silva',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '2. Joias espirituais (10 min)',
+        assignee: 'Wdeyverson M. de Freitas',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '3. Leitura da Bíblia (4 min) Jer. 50:1-16 (th lição 8)',
+        assignee: 'James',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '4. Iniciando conversas (3 min)',
+        description: 'DE CASA EM CASA. Comece uma conversa amigável. (lmd lição 2 ponto 3)',
+        assignee: 'Camila Medeiros',
+        assistant: 'Léia',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '5. Cultivando o interesse (4 min)',
+        description: 'TESTEMUNHO INFORMAL. Faça uma revisita. (lmd lição 7 ponto 4)',
+        assignee: 'Rose Peres',
+        assistant: 'Marta Silva',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '6. Discurso (5 min)',
+        description: 'Tema: Confie no julgamento de Jeová. (th lição 14)',
+        assignee: 'Taylisson Mesquita',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: 'Cântico 38: Jeová te dará força',
+        assignee: '',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '7. Necessidades locais (15 min) Consideração.',
+        assignee: 'Aquiles A. de Oliveira',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '8. Estudo bíblico de congregação (30 min)',
+        description: 'wcg cap. 15',
+        assignee: 'Marcos Silva',
+        assistant: 'Júlio César',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Áudio',
+        assignee: 'Anselmo',
+        assistant: 'Áudio e Vídeo',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Microfone Volante',
+        assignee: 'James',
+        assistant: 'Palco e Microfone',
+        description: 'Gabriel S. Aguiar|Microfone',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Indicador',
+        assignee: 'Jesuino',
+        assistant: 'Interno',
+        description: 'Edgard|Externo',
+      },
+    ]),
+  },
+  {
+    id: 'preset-9-15-nov',
+    weekLabel: '9–15 de nov. de 2026',
+    chairman: 'Aquiles A. de Oliveira',
+    openingPrayer: 'Djonata Bertolini',
+    closingPrayer: 'Valderimar C. Monteiro',
+    partsJson: JSON.stringify([
+      {
+        section: 'Cabecalho',
+        title: 'quarta-feira, 11 de novembro de 2026 • JEREMIAS 52',
+        description: 'Cântico 24: Venha ao monte de Jeová',
+        assignee: 'Cântico 61: Avancem, Testemunhas!',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '1. O cumprimento da Palavra de Jeová (10 min)',
+        assignee: 'Djonata Bertolini',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '2. Joias espirituais (10 min)',
+        assignee: 'Taylisson Mesquita',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '3. Leitura da Bíblia (4 min) Jer. 52:1-16 (th lição 9)',
+        assignee: 'Sandro',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '4. Iniciando conversas (3 min)',
+        description: 'TESTEMUNHO PÚBLICO. Use o carrinho ou mostruário. (lmd lição 3 ponto 4)',
+        assignee: 'Leila',
+        assistant: 'Izaltina G. Coelho',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '5. Cultivando o interesse (4 min)',
+        description: 'DE CASA EM CASA. Mostre como funciona um estudo bíblico. (lmd lição 9 ponto 3)',
+        assignee: 'Camila Medeiros',
+        assistant: 'Vangela S. dos Santos',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '6. Fazendo discípulos (5 min)',
+        description: 'Ajude o estudante a se preparar para a reunião. (th lição 11)',
+        assignee: 'Wdeyverson M. de Freitas',
+        assistant: 'Reginaldo',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: 'Cântico 85: Recebam uns aos outros',
+        assignee: '',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '7. Mantenha a lealdade sob provação (15 min) Consideração.',
+        assignee: 'Valderimar C. Monteiro',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '8. Estudo bíblico de congregação (30 min)',
+        description: 'wcg cap. 16',
+        assignee: 'Aquiles A. de Oliveira',
+        assistant: 'Anselmo',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Áudio',
+        assignee: 'Wdeyverson M. de Freitas',
+        assistant: 'Áudio e Vídeo',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Microfone Volante',
+        assignee: 'Júlio César',
+        assistant: 'Palco e Microfone',
+        description: 'Reginaldo|Microfone',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Indicador',
+        assignee: 'Manoel',
+        assistant: 'Interno',
+        description: 'Sandro|Externo',
+      },
+    ]),
+  },
+  {
+    id: 'preset-16-22-nov',
+    weekLabel: '16–22 de nov. de 2026',
+    chairman: 'Taylisson Mesquita',
+    openingPrayer: 'Taylisson Mesquita',
+    closingPrayer: 'Wdeyverson M. de Freitas',
+    partsJson: JSON.stringify([
+      {
+        section: 'Cabecalho',
+        title: 'quarta-feira, 18 de novembro de 2026 • LAMENTAÇÕES 1-2',
+        description: 'Cântico 28: Quem pode ser amigo de Jeová?',
+        assignee: 'Cântico 92: Um lugar que leva teu nome',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '1. Uma reação compreensível diante de uma terrível perda (10 min)',
+        assignee: 'Valderimar C. Monteiro',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '2. Joias espirituais (10 min)',
+        assignee: 'Djonata Bertolini',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '3. Leitura da Bíblia (4 min) Lam. 1:8-18 (th lição 10)',
+        assignee: 'James',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '4. Iniciando conversas (3 min)',
+        description: 'TESTEMUNHO INFORMAL. Comece uma conversa amigável com uma pessoa. A conversa termina antes de você conseguir dar testemunho. (lmd lição 2 ponto 4)',
+        assignee: 'Camila Medeiros',
+        assistant: 'Vangela S. dos Santos',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '5. Cultivando o interesse (4 min)',
+        description: 'TESTEMUNHO PÚBLICO. Use um vídeo do Kit de Ensino e ofereça um estudo bíblico. (lmd lição 9 ponto 4)',
+        assignee: 'Camila Medeiros',
+        assistant: 'Léia',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '6. O que você diria? (5 min) Consideração.',
+        description: 'DE CASA EM CASA. Faça um resumo da lmd lição 1 ponto 4b. Mostre a imagem. Depois, pergunte',
+        assignee: 'Taylisson Mesquita',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: 'Cântico 90: “Encorajando uns aos outros”',
+        assignee: '',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '7. Não se esqueça de nossos irmãos e irmãs inativos (15 min) Consideração.',
+        assignee: 'Aquiles A. de Oliveira',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '8. Estudo bíblico de congregação (30 min)',
+        description: 'wcg cap. 17',
+        assignee: 'Wdeyverson M. de Freitas',
+        assistant: 'Reginaldo',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Áudio',
+        assignee: 'Anselmo',
+        assistant: 'Áudio e Vídeo',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Microfone Volante',
+        assignee: 'James',
+        assistant: 'Palco e Microfone',
+        description: 'Gabriel S. Aguiar|Microfone',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Indicador',
+        assignee: 'Jesuino',
+        assistant: 'Interno',
+        description: 'Edgard|Externo',
+      },
+    ]),
+  },
+  {
+    id: 'preset-23-29-nov',
+    weekLabel: '23–29 de nov. de 2026',
+    chairman: 'Wdeyverson M. de Freitas',
+    openingPrayer: 'Wdeyverson M. de Freitas',
+    closingPrayer: 'Manoel',
+    partsJson: JSON.stringify([
+      {
+        section: 'Cabecalho',
+        title: 'quarta-feira, 25 de novembro de 2026 • LAMENTAÇÕES 3-5',
+        description: 'Cântico 158: ‘Não vai se atrasar!’',
+        assignee: 'Cântico 74: A canção do Reino',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '1. Não desista quando passar por provações (10 min)',
+        assignee: 'Anselmo',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '2. Joias espirituais (10 min)',
+        assignee: 'Aquiles A. de Oliveira',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '3. Leitura da Bíblia (4 min) Lam. 3:19-42 (th lição 12)',
+        assignee: 'Júlio César',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '4. Iniciando conversas (3 min)',
+        description: 'DE CASA EM CASA. Fale sobre uma verdade da Bíblia. Talvez você possa usar uma das que estão no apêndice A da brochura Ame as Pessoas. (lmd lição 5 ponto 4)',
+        assignee: 'Rose Peres',
+        assistant: 'Marta Silva',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '5. Iniciando conversas (4 min)',
+        description: 'TESTEMUNHO INFORMAL. Ofereça um folheto. (lmd lição 4 ponto 3)',
+        assignee: 'Leila',
+        assistant: 'Izaltina G. Coelho',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '6. Discurso (5 min)',
+        description: 'w25.12 26-30 — Tema: Idosos — vocês são uma joia para a congregação. (th lição 16)',
+        assignee: 'Sandro',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: 'Cântico 109: Mostre amor de coração',
+        assignee: '',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '7. Ajude os cuidadores a não desanimar (15 min) Consideração.',
+        assignee: 'Valderimar C. Monteiro',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '8. Estudo bíblico de congregação (30 min)',
+        description: 'wcg cap. 18',
+        assignee: 'Djonata Bertolini',
+        assistant: 'Taylisson Mesquita',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Áudio',
+        assignee: 'Anselmo',
+        assistant: 'Áudio e Vídeo',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Microfone Volante',
+        assignee: 'James',
+        assistant: 'Palco e Microfone',
+        description: 'Gabriel S. Aguiar|Microfone',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Indicador',
+        assignee: 'Jesuino',
+        assistant: 'Interno',
+        description: 'Edgard|Externo',
+      },
+    ]),
+  },
+  {
+    id: 'preset-30-nov-6-dez',
+    weekLabel: '30 de nov.–6 de dez. de 2026',
+    chairman: 'Djonata Bertolini',
+    openingPrayer: 'Anselmo',
+    closingPrayer: 'Aquiles A. de Oliveira',
+    partsJson: JSON.stringify([
+      {
+        section: 'Cabecalho',
+        title: 'quarta-feira, 2 de dezembro de 2026 • EZEQUIEL 1-3',
+        description: 'Cântico 40: A quem pertence este lugar?',
+        assignee: 'Cântico 99: Milhares de irmãos',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '1. O carro celestial de Jeová em movimento (10 min)',
+        assignee: 'Aquiles A. de Oliveira',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '2. Joias espirituais (10 min)',
+        assignee: 'Wdeyverson M. de Freitas',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '3. Leitura da Bíblia (4 min) Eze. 1:1-14 (th lição 5)',
+        assignee: 'Gabriel S. Aguiar',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '4. Iniciando conversas (3 min)',
+        description: 'DE CASA EM CASA. Use uma pergunta para despertar interesse. (lmd lição 1 ponto 3)',
+        assignee: 'Camila Medeiros',
+        assistant: 'Léia',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '5. Cultivando o interesse (4 min)',
+        description: 'DE CASA EM CASA. Responda a uma pergunta feita na visita anterior. (lmd lição 8 ponto 3)',
+        assignee: 'Rose Peres',
+        assistant: 'Marta Silva',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '6. Fazendo discípulos (5 min)',
+        description: 'Incentive o estudante a ler a Bíblia diariamente. (th lição 10)',
+        assignee: 'Taylisson Mesquita',
+        assistant: 'Júlio César',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: 'Cântico 67: “Prega a palavra”',
+        assignee: '',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '7. Acompanhe o carro de Jeová (15 min) Consideração.',
+        assignee: 'Djonata Bertolini',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '8. Estudo bíblico de congregação (30 min)',
+        description: 'wcg cap. 19',
+        assignee: 'Valderimar C. Monteiro',
+        assistant: 'James',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Áudio',
+        assignee: 'Wdeyverson M. de Freitas',
+        assistant: 'Áudio e Vídeo',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Microfone Volante',
+        assignee: 'Reginaldo',
+        assistant: 'Palco e Microfone',
+        description: 'Sandro|Microfone',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Indicador',
+        assignee: 'Manoel',
+        assistant: 'Interno',
+        description: 'Jesuino|Externo',
+      },
+    ]),
+  },
+  {
+    id: 'preset-7-13-dez',
+    weekLabel: '7–13 de dez. de 2026',
+    chairman: 'Valderimar C. Monteiro',
+    openingPrayer: 'Taylisson Mesquita',
+    closingPrayer: 'Djonata Bertolini',
+    partsJson: JSON.stringify([
+      {
+        section: 'Cabecalho',
+        title: 'quarta-feira, 9 de dezembro de 2026 • EZEQUIEL 4-7',
+        description: 'Cântico 45: A meditação do meu coração',
+        assignee: 'Cântico 126: Não desista, continue forte!',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '1. O fim chegou para os adoradores de ídolos (10 min)',
+        assignee: 'Wdeyverson M. de Freitas',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '2. Joias espirituais (10 min)',
+        assignee: 'Anselmo',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '3. Leitura da Bíblia (4 min) Eze. 7:1-15 (th lição 11)',
+        assignee: 'Edgard',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '4. Iniciando conversas (3 min)',
+        description: 'TESTEMUNHO INFORMAL. Elogie a pessoa e inicie uma conversa. (lmd lição 2 ponto 5)',
+        assignee: 'Leila',
+        assistant: 'Izaltina G. Coelho',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '5. Cultivando o interesse (4 min)',
+        description: 'DE CASA EM CASA. Deixe uma publicação do Kit de Ensino. (lmd lição 7 ponto 5)',
+        assignee: 'Vangela S. dos Santos',
+        assistant: 'Camila Medeiros',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '6. Discurso (5 min)',
+        description: 'Tema: Por que o dinheiro não poderá salvar ninguém no dia da fúria de Jeová? (th lição 13)',
+        assignee: 'Reginaldo',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: 'Cântico 58: Procure os amigos da paz',
+        assignee: '',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '7. Realizações da Organização (15 min) Vídeo e consideração.',
+        assignee: 'Taylisson Mesquita',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '8. Estudo bíblico de congregação (30 min)',
+        description: 'wcg cap. 20',
+        assignee: 'Aquiles A. de Oliveira',
+        assistant: 'Júlio César',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Áudio',
+        assignee: 'Anselmo',
+        assistant: 'Áudio e Vídeo',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Microfone Volante',
+        assignee: 'James',
+        assistant: 'Palco e Microfone',
+        description: 'Gabriel S. Aguiar|Microfone',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Indicador',
+        assignee: 'Jesuino',
+        assistant: 'Interno',
+        description: 'Edgard|Externo',
+      },
+    ]),
+  },
+  {
+    id: 'preset-14-20-dez',
+    weekLabel: '14–20 de dez. de 2026',
+    chairman: 'Taylisson Mesquita',
+    openingPrayer: 'Wdeyverson M. de Freitas',
+    closingPrayer: 'Anselmo',
+    partsJson: JSON.stringify([
+      {
+        section: 'Cabecalho',
+        title: 'quarta-feira, 16 de dezembro de 2026 • EZEQUIEL 8-11',
+        description: 'Cântico 50: Minha oração de dedicação',
+        assignee: 'Cântico 134: Os filhos são uma herança de Deus',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '1. Você está marcado para sobreviver? (10 min)',
+        assignee: 'Djonata Bertolini',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '2. Joias espirituais (10 min)',
+        assignee: 'Valderimar C. Monteiro',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '3. Leitura da Bíblia (4 min) Eze. 9:1-11 (th lição 2)',
+        assignee: 'Manoel',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '4. Iniciando conversas (3 min)',
+        description: 'DE CASA EM CASA. Mostre empatia ao morador. (lmd lição 3 ponto 3)',
+        assignee: 'Rose Peres',
+        assistant: 'Marta Silva',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '5. Cultivando o interesse (4 min)',
+        description: 'TESTEMUNHO PÚBLICO. Convide a pessoa para a reunião. (lmd lição 9 ponto 5)',
+        assignee: 'Camila Medeiros',
+        assistant: 'Léia',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '6. Fazendo discípulos (5 min)',
+        description: 'Ajude o estudante a vencer um hábito ruim. (th lição 15)',
+        assignee: 'Sandro',
+        assistant: 'James',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: 'Cântico 89: Escute, obedeça e seja abençoado',
+        assignee: '',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '7. Necessidades locais (15 min) Consideração.',
+        assignee: 'Aquiles A. de Oliveira',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '8. Estudo bíblico de congregação (30 min)',
+        description: 'wcg cap. 21',
+        assignee: 'Wdeyverson M. de Freitas',
+        assistant: 'Taylisson Mesquita',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Áudio',
+        assignee: 'Djonata Bertolini',
+        assistant: 'Áudio e Vídeo',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Microfone Volante',
+        assignee: 'Júlio César',
+        assistant: 'Palco e Microfone',
+        description: 'Reginaldo|Microfone',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Indicador',
+        assignee: 'Sandro',
+        assistant: 'Interno',
+        description: 'Manoel|Externo',
+      },
+    ]),
+  },
+  {
+    id: 'preset-21-27-dez',
+    weekLabel: '21–27 de dez. de 2026',
+    chairman: 'Wdeyverson M. de Freitas',
+    openingPrayer: 'Aquiles A. de Oliveira',
+    closingPrayer: 'Taylisson Mesquita',
+    partsJson: JSON.stringify([
+      {
+        section: 'Cabecalho',
+        title: 'quarta-feira, 23 de dezembro de 2026 • EZEQUIEL 12-14',
+        description: 'Cântico 55: Não tenha medo deles!',
+        assignee: 'Cântico 150: Busquem a Deus para serem salvos',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '1. Cada um será salvo pela sua própria justiça (10 min)',
+        assignee: 'Aquiles A. de Oliveira',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '2. Joias espirituais (10 min)',
+        assignee: 'Taylisson Mesquita',
+      },
+      {
+        section: 'TESOUROS DA PALAVRA DE DEUS',
+        title: '3. Leitura da Bíblia (4 min) Eze. 14:12-23 (th lição 10)',
+        assignee: 'Reginaldo',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '4. Iniciando conversas (3 min)',
+        description: 'DE CASA EM CASA. Use um folheto para iniciar a conversa. (lmd lição 4 ponto 4)',
+        assignee: 'Leila',
+        assistant: 'Izaltina G. Coelho',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '5. Cultivando o interesse (4 min)',
+        description: 'TESTEMUNHO INFORMAL. Apresente o curso bíblico interativo. (lmd lição 8 ponto 4)',
+        assignee: 'Camila Medeiros',
+        assistant: 'Vangela S. dos Santos',
+      },
+      {
+        section: 'FAÇA SEU MELHOR NO MINISTÉRIO',
+        title: '6. Discurso (5 min)',
+        description: 'Tema: Imite a fé de Noé, Daniel e Jó. (th lição 12)',
+        assignee: 'Anselmo',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: 'Cântico 118: “Dá-nos mais fé”',
+        assignee: '',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '7. Fortaleça sua fé nas promessas de Jeová (15 min) Consideração.',
+        assignee: 'Valderimar C. Monteiro',
+      },
+      {
+        section: 'NOSSA VIDA CRISTÃ',
+        title: '8. Estudo bíblico de congregação (30 min)',
+        description: 'wcg cap. 22',
+        assignee: 'Djonata Bertolini',
+        assistant: 'Gabriel S. Aguiar',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Áudio',
+        assignee: 'Anselmo',
+        assistant: 'Áudio e Vídeo',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Microfone Volante',
+        assignee: 'James',
+        assistant: 'Palco e Microfone',
+        description: 'Gabriel S. Aguiar|Microfone',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Indicador',
+        assignee: 'Jesuino',
+        assistant: 'Interno',
+        description: 'Edgard|Externo',
+      },
+    ]),
+  },
+];
+
 const HORAS_BASE_POR_DIA: Record<number, number> = {
   2: 2,
   5: 4.0,
@@ -100,6 +802,25 @@ const HORAS_BASE_POR_DIA: Record<number, number> = {
   12: 4.5,
   16: 3.0,
 };
+
+function normalizeWeekKey(label: string): string {
+  const nums = label.match(/\d+/g);
+  if (nums && nums.length >= 2) {
+    return `${nums[0]}-${nums[1]}`;
+  }
+  return label.trim().toLowerCase();
+}
+
+function formatWeekTwoLines(label: string): { top: string; bottom?: string } {
+  const idx = label.indexOf(' de 202');
+  if (idx > 0) {
+    return {
+      top: label.slice(0, idx).trim(),
+      bottom: label.slice(idx).trim(),
+    };
+  }
+  return { top: label };
+}
 
 function isElderOrDev(user: MemberProfile | null) {
   if (!user) return false;
@@ -273,7 +994,9 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<Tab>('inicio');
   const [scheduleSubTab, setScheduleSubTab] = useState<ScheduleSubTab>('meio_de_semana');
-  const [selectedWeekIndex, setSelectedWeekIndex] = useState<number>(0);
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState<number>(2);
+  const [showWeekModal, setShowWeekModal] = useState<boolean>(false);
+  const [switchingWeek, setSwitchingWeek] = useState<boolean>(false);
 
   const [darkMode, setDarkMode] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -315,18 +1038,22 @@ export default function App() {
 
   const [showNewAssignmentForm, setShowNewAssignmentForm] = useState(false);
   const [novoCargo, setNovoCargo] = useState('');
+  const [novoTemaDiscurso, setNovoTemaDiscurso] = useState('');
   const [novaDataEscala, setNovaDataEscala] = useState('');
   const [novoLocalEscala, setNovoLocalEscala] = useState('Salão Principal');
   const [membroDesignadoId, setMembroDesignadoId] = useState('');
 
   const [showNewMidweekForm, setShowNewMidweekForm] = useState(false);
+  const [editingMidweekId, setEditingMidweekId] = useState<string | null>(null);
   const [mwWeekLabel, setMwWeekLabel] = useState('16–22 de nov. de 2026');
   const [mwMeetingDay, setMwMeetingDay] = useState('quarta-feira, 18 de novembro de 2026');
   const [mwBibleReading, setMwBibleReading] = useState('LAMENTAÇÕES 1-2');
   const [mwOpeningSong, setMwOpeningSong] = useState('Cântico 28: Quem pode ser amigo de Jeová?');
+  const [mwClosingSong, setMwClosingSong] = useState('Cântico 74: A canção do Reino');
   const [mwChairman, setMwChairman] = useState('');
   const [mwOpeningPrayer, setMwOpeningPrayer] = useState('');
   const [mwClosingPrayer, setMwClosingPrayer] = useState('');
+
   const [mwTreasures1, setMwTreasures1] = useState('1. Uma reação compreensível diante de uma terrível perda (10 min)');
   const [mwTreasures1Assignee, setMwTreasures1Assignee] = useState('');
   const [mwTreasures2, setMwTreasures2] = useState('2. Joias espirituais (10 min)');
@@ -356,6 +1083,17 @@ export default function App() {
   const [mwLiving8Desc, setMwLiving8Desc] = useState('wcg cap. 17');
   const [mwLiving8Assignee, setMwLiving8Assignee] = useState('');
   const [mwLiving8Assistant, setMwLiving8Assistant] = useState('');
+
+  const [mwAudioName, setMwAudioName] = useState('Anselmo');
+  const [mwAudioRole, setMwAudioRole] = useState('Áudio e Vídeo');
+  const [mwMic1Name, setMwMic1Name] = useState('James');
+  const [mwMic1Role, setMwMic1Role] = useState('Palco e Microfone');
+  const [mwMic2Name, setMwMic2Name] = useState('Gabriel S. Aguiar');
+  const [mwMic2Role, setMwMic2Role] = useState('Microfone');
+  const [mwInd1Name, setMwInd1Name] = useState('Jesuino');
+  const [mwInd1Role, setMwInd1Role] = useState('Interno');
+  const [mwInd2Name, setMwInd2Name] = useState('Edgard');
+  const [mwInd2Role, setMwInd2Role] = useState('Externo');
 
   const [showNewCleaningForm, setShowNewCleaningForm] = useState(false);
   const [cleanWeekLabel, setCleanWeekLabel] = useState('');
@@ -669,6 +1407,20 @@ export default function App() {
     }
   };
 
+  const removerEscalaNoBanco = async (escalaId: string) => {
+    if (!podeEnviarDesignacoes) return;
+    try {
+      const res = await fetch(`${API_URL}/assignments/${escalaId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        await carregarDadosDoBanco();
+      }
+    } catch {
+      alert('Erro ao remover designação.');
+    }
+  };
+
   const criarNovaEscalaNoBanco = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!podeEnviarDesignacoes || !novoCargo.trim() || !novaDataEscala.trim() || !membroDesignadoId) return;
@@ -679,6 +1431,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cargo: novoCargo,
+          theme: novoTemaDiscurso,
           data: novaDataEscala,
           local: novoLocalEscala,
           memberId: membroDesignadoId,
@@ -688,6 +1441,7 @@ export default function App() {
 
       if (res.ok) {
         setNovoCargo('');
+        setNovoTemaDiscurso('');
         setNovaDataEscala('');
         setShowNewAssignmentForm(false);
         await carregarDadosDoBanco();
@@ -698,16 +1452,95 @@ export default function App() {
     }
   };
 
-  const criarReuniaoMeioSemana = async (e: React.FormEvent) => {
+  const abrirEdicaoReuniaoMeioSemana = (reuniao: MidweekMeetingItem) => {
+    const partes = parseParts(reuniao.partsJson);
+    const cab = partes.find((p) => p.section === 'Cabecalho');
+    const tes = partes.filter((p) => p.section === 'TESOUROS DA PALAVRA DE DEUS');
+    const min = partes.filter((p) => p.section === 'FAÇA SEU MELHOR NO MINISTÉRIO');
+    const vid = partes.filter((p) => p.section === 'NOSSA VIDA CRISTÃ');
+    const aud = partes.filter((p) => p.section === 'ÁUDIO/VÍDEO & INDICADORES');
+
+    const tituloCab = cab?.title || '';
+    const [diaParte, leituraParte] = tituloCab.includes(' • ')
+      ? tituloCab.split(' • ')
+      : [tituloCab, ''];
+
+    const cantVida = vid.find((v) => !v.assignee);
+    const partesVidaNumeradas = vid.filter((v) => Boolean(v.assignee));
+
+    const itemAudio = aud.find((a) => a.title === 'Áudio') || aud[0];
+    const itemMic = aud.find((a) => a.title === 'Microfone Volante') || aud[1];
+    const itemInd = aud.find((a) => a.title === 'Indicador') || aud[2];
+
+    const [mic2Nome, mic2Func] = (itemMic?.description || '|').split('|');
+    const [ind2Nome, ind2Func] = (itemInd?.description || '|').split('|');
+
+    setEditingMidweekId(reuniao.id.startsWith('preset-') ? null : reuniao.id);
+    setMwWeekLabel(reuniao.weekLabel);
+    setMwMeetingDay(diaParte || reuniao.weekLabel);
+    setMwBibleReading(leituraParte || '');
+    setMwOpeningSong(cab?.description || '');
+    setMwClosingSong(cab?.assignee || 'Cântico 74: A canção do Reino');
+    setMwChairman(reuniao.chairman);
+    setMwOpeningPrayer(reuniao.openingPrayer);
+    setMwClosingPrayer(reuniao.closingPrayer);
+
+    setMwTreasures1(tes[0]?.title || '1. Tesouros da Palavra de Deus (10 min)');
+    setMwTreasures1Assignee(tes[0]?.assignee || '');
+    setMwTreasures2(tes[1]?.title || '2. Joias espirituais (10 min)');
+    setMwTreasures2Assignee(tes[1]?.assignee || '');
+    setMwTreasures3(tes[2]?.title || '3. Leitura da Bíblia (4 min)');
+    setMwTreasures3Assignee(tes[2]?.assignee || '');
+
+    setMwMinistry4(min[0]?.title || '4. Iniciando conversas (3 min)');
+    setMwMinistry4Desc(min[0]?.description || '');
+    setMwMinistry4Assignee(min[0]?.assignee || '');
+    setMwMinistry4Assistant(min[0]?.assistant || '');
+
+    setMwMinistry5(min[1]?.title || '5. Cultivando o interesse (4 min)');
+    setMwMinistry5Desc(min[1]?.description || '');
+    setMwMinistry5Assignee(min[1]?.assignee || '');
+    setMwMinistry5Assistant(min[1]?.assistant || '');
+
+    setMwMinistry6(min[2]?.title || '6. Discurso (5 min)');
+    setMwMinistry6Desc(min[2]?.description || '');
+    setMwMinistry6Assignee(min[2]?.assignee || '');
+    setMwMinistry6Assistant(min[2]?.assistant || '');
+
+    setMwLivingSong(cantVida?.title || 'Cântico 109: Mostre amor de coração');
+    setMwLiving7(partesVidaNumeradas[0]?.title || '7. Consideração (15 min)');
+    setMwLiving7Assignee(partesVidaNumeradas[0]?.assignee || '');
+    setMwLiving8(partesVidaNumeradas[1]?.title || '8. Estudo bíblico de congregação (30 min)');
+    setMwLiving8Desc(partesVidaNumeradas[1]?.description || '');
+    setMwLiving8Assignee(partesVidaNumeradas[1]?.assignee || '');
+    setMwLiving8Assistant(partesVidaNumeradas[1]?.assistant || '');
+
+    setMwAudioName(itemAudio?.assignee || 'Anselmo');
+    setMwAudioRole(itemAudio?.assistant || 'Áudio e Vídeo');
+    setMwMic1Name(itemMic?.assignee || 'James');
+    setMwMic1Role(itemMic?.assistant || 'Palco e Microfone');
+    setMwMic2Name(mic2Nome || 'Gabriel S. Aguiar');
+    setMwMic2Role(mic2Func || 'Microfone');
+    setMwInd1Name(itemInd?.assignee || 'Jesuino');
+    setMwInd1Role(itemInd?.assistant || 'Interno');
+    setMwInd2Name(ind2Nome || 'Edgard');
+    setMwInd2Role(ind2Func || 'Externo');
+
+    setShowNewMidweekForm(true);
+  };
+
+  const salvarReuniaoMeioSemana = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!podeEnviarDesignacoes || !mwWeekLabel.trim() || !mwChairman.trim()) return;
 
     const parts: MidweekPart[] = [
       {
         section: 'Cabecalho',
-        title: `${mwMeetingDay.trim()} • ${mwBibleReading.trim()}`,
+        title: mwBibleReading.trim()
+          ? `${mwMeetingDay.trim()} • ${mwBibleReading.trim()}`
+          : mwMeetingDay.trim(),
         description: mwOpeningSong.trim(),
-        assignee: '',
+        assignee: mwClosingSong.trim(),
       },
       {
         section: 'TESOUROS DA PALAVRA DE DEUS',
@@ -762,11 +1595,37 @@ export default function App() {
         assignee: mwLiving8Assignee.trim() || mwChairman.trim(),
         assistant: mwLiving8Assistant.trim() || undefined,
       },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Áudio',
+        assignee: mwAudioName.trim(),
+        assistant: mwAudioRole.trim(),
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Microfone Volante',
+        assignee: mwMic1Name.trim(),
+        assistant: mwMic1Role.trim(),
+        description: mwMic2Name.trim() ? `${mwMic2Name.trim()}|${mwMic2Role.trim()}` : '',
+      },
+      {
+        section: 'ÁUDIO/VÍDEO & INDICADORES',
+        title: 'Indicador',
+        assignee: mwInd1Name.trim(),
+        assistant: mwInd1Role.trim(),
+        description: mwInd2Name.trim() ? `${mwInd2Name.trim()}|${mwInd2Role.trim()}` : '',
+      },
     ];
 
     try {
-      const res = await fetch(`${API_URL}/midweek-meetings`, {
-        method: 'POST',
+      const isEditing = Boolean(editingMidweekId);
+      const endpoint = isEditing
+        ? `${API_URL}/midweek-meetings/${editingMidweekId}`
+        : `${API_URL}/midweek-meetings`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetch(endpoint, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           weekLabel: mwWeekLabel.trim(),
@@ -780,9 +1639,13 @@ export default function App() {
 
       if (res.ok) {
         setShowNewMidweekForm(false);
-        setSelectedWeekIndex(0);
+        setEditingMidweekId(null);
         await carregarDadosDoBanco();
-        alert('📖 Programação do meio de semana salva no PostgreSQL!');
+        alert(
+          isEditing
+            ? '✏️ Reunião do meio de semana atualizada no PostgreSQL!'
+            : '📖 Programação do meio de semana salva no PostgreSQL!'
+        );
       }
     } catch {
       alert('Erro ao salvar reunião do meio de semana.');
@@ -794,7 +1657,6 @@ export default function App() {
     try {
       const res = await fetch(`${API_URL}/midweek-meetings/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        setSelectedWeekIndex(0);
         await carregarDadosDoBanco();
       }
     } catch {
@@ -1164,15 +2026,93 @@ export default function App() {
   };
 
   const meuRelatorioMes = (currentUser.monthlyReports || []).find((r) => r.monthYear === MES_ATUAL);
-  const minhaProximaEscala = escalas.find((e) => e.memberId === currentUser.id) || escalas[0];
 
-  const semanaSelecionada =
-    midweekMeetings[selectedWeekIndex] || midweekMeetings[0] || null;
+  // Mantém a ordem das 8 semanas padrão do Hourglass, substituindo pelos dados do banco quando a mesma semana já tiver sido salva/editada no PostgreSQL, e adiciona novas semanas extras criadas no banco.
+  const listaSemanasDisponiveis = (() => {
+    const porChaveBanco = new Map<string, MidweekMeetingItem>();
+    midweekMeetings.forEach((m) => {
+      porChaveBanco.set(normalizeWeekKey(m.weekLabel), m);
+    });
+
+    const usadas = new Set<string>();
+    const resultado: MidweekMeetingItem[] = SEMANAS_PADRAO_HOURGLASS.map((padrao) => {
+      const chave = normalizeWeekKey(padrao.weekLabel);
+      const doBanco = porChaveBanco.get(chave);
+      if (doBanco) {
+        usadas.add(doBanco.id);
+        const partesBanco = parseParts(doBanco.partsJson);
+        if (partesBanco.length > 0) {
+          return {
+            ...doBanco,
+            weekLabel: padrao.weekLabel,
+          };
+        }
+      }
+      return padrao;
+    });
+
+    midweekMeetings.forEach((m) => {
+      if (!usadas.has(m.id)) {
+        resultado.push(m);
+      }
+    });
+
+    return resultado;
+  })();
+
+  const indiceSeguro =
+    selectedWeekIndex < listaSemanasDisponiveis.length ? selectedWeekIndex : 0;
+  const semanaSelecionada = listaSemanasDisponiveis[indiceSeguro] || null;
   const partesSemana = semanaSelecionada ? parseParts(semanaSelecionada.partsJson) : [];
   const parteCabecalho = partesSemana.find((p) => p.section === 'Cabecalho');
   const partesTesouros = partesSemana.filter((p) => p.section === 'TESOUROS DA PALAVRA DE DEUS');
   const partesMinisterio = partesSemana.filter((p) => p.section === 'FAÇA SEU MELHOR NO MINISTÉRIO');
   const partesVidaCrista = partesSemana.filter((p) => p.section === 'NOSSA VIDA CRISTÃ');
+  const partesAudioIndicadores = partesSemana.filter(
+    (p) => p.section === 'ÁUDIO/VÍDEO & INDICADORES'
+  );
+
+  // Se a semana no banco não tinha a secção de Áudio/Vídeo & Indicadores, usa os valores padrão para exibir igual ao vídeo
+  const listaAudioIndicadores: MidweekPart[] =
+    partesAudioIndicadores.length > 0
+      ? partesAudioIndicadores
+      : [
+          {
+            section: 'ÁUDIO/VÍDEO & INDICADORES',
+            title: 'Áudio',
+            assignee: 'Anselmo',
+            assistant: 'Áudio e Vídeo',
+          },
+          {
+            section: 'ÁUDIO/VÍDEO & INDICADORES',
+            title: 'Microfone Volante',
+            assignee: 'James',
+            assistant: 'Palco e Microfone',
+            description: 'Gabriel S. Aguiar|Microfone',
+          },
+          {
+            section: 'ÁUDIO/VÍDEO & INDICADORES',
+            title: 'Indicador',
+            assignee: 'Jesuino',
+            assistant: 'Interno',
+            description: 'Edgard|Externo',
+          },
+        ];
+
+  const canticoFinalTexto =
+    parteCabecalho?.assignee || 'Cântico 74: A canção do Reino';
+
+  const escolherSemanaNoModal = (idx: number) => {
+    setShowWeekModal(false);
+    setShowNewMidweekForm(false);
+    setEditingMidweekId(null);
+    setSwitchingWeek(true);
+    setSelectedWeekIndex(idx);
+    setScheduleSubTab('meio_de_semana');
+    setTimeout(() => {
+      setSwitchingWeek(false);
+    }, 220);
+  };
 
   return (
     <div className={darkMode ? 'bg-[#121A13] text-[#EAECE9] min-h-screen' : 'bg-[#2C3A2B] text-white min-h-screen'}>
@@ -1222,6 +2162,26 @@ export default function App() {
 
           {activeTab === 'inicio' && (
             <div className="space-y-3.5">
+              {/* Cartão de Programação igual ao topo do Hourglass no vídeo */}
+              <div className="flex items-center justify-between py-2 px-1">
+                <div>
+                  <span className="text-xs text-[#A5B8A3] block">Programação</span>
+                  <strong className="text-lg font-extrabold text-white">
+                    {semanaSelecionada ? semanaSelecionada.weekLabel : '16–22 de nov. de 2026'}
+                  </strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('escalas');
+                    setScheduleSubTab('meio_de_semana');
+                  }}
+                  className="px-4 py-1.5 rounded-full font-bold text-sm bg-[#C89B3C] hover:bg-[#d8ab4c] text-[#121A13] cursor-pointer"
+                >
+                  Ver
+                </button>
+              </div>
+
               <div className="flex items-center justify-between px-1">
                 <div>
                   <span className="text-[10px] uppercase tracking-widest text-[#8FA38B] font-bold block">
@@ -1470,51 +2430,88 @@ export default function App() {
                   </div>
                 </div>
               </div>
-
-              <div
-                onClick={() => setActiveTab('escalas')}
-                className={`rounded-2xl p-3.5 border cursor-pointer flex justify-between items-center ${cardStyle}`}
-              >
-                <div>
-                  <span className="text-[10px] uppercase tracking-wider opacity-75 block">Próxima Escala / Parte:</span>
-                  <strong className="text-xs">
-                    {minhaProximaEscala ? `${minhaProximaEscala.cargo} • ${minhaProximaEscala.data}` : 'Ver Escalas da Congregação'}
-                  </strong>
-                </div>
-                <span className="text-xs bg-[#466044] text-white px-2.5 py-1 rounded-lg font-semibold">Ver →</span>
-              </div>
             </div>
           )}
 
           {activeTab === 'escalas' && (
-            <div className="space-y-4">
+            <div className="relative space-y-4">
+              {/* Topo idêntico ao vídeo: botão voltar <, seletor da semana centralizado e botão + Semana */}
               <div className="flex items-center justify-between gap-2">
-                <select
-                  value={selectedWeekIndex}
-                  onChange={(e) => setSelectedWeekIndex(Number(e.target.value))}
-                  className="bg-[#1A261C] border border-[#2F4231] text-white text-xs font-bold px-3 py-2 rounded-xl flex-1 cursor-pointer"
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('inicio')}
+                  className="w-9 h-9 rounded-full bg-[#1E201E] border border-[#343834] flex items-center justify-center text-white text-base font-bold cursor-pointer shrink-0"
                 >
-                  {midweekMeetings.length > 0 ? (
-                    midweekMeetings.map((m, idx) => (
-                      <option key={m.id} value={idx}>
-                        {m.weekLabel}
-                      </option>
-                    ))
-                  ) : (
-                    <option value={0}>16–22 de nov. de 2026</option>
-                  )}
-                </select>
+                  ‹
+                </button>
 
-                {podeEnviarDesignacoes && (
+                <button
+                  type="button"
+                  onClick={() => setShowWeekModal(!showWeekModal)}
+                  className="bg-transparent hover:bg-[#1E261F] text-white text-sm font-extrabold px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>{semanaSelecionada ? semanaSelecionada.weekLabel : '16–22 de nov. de 2026'}</span>
+                  <span className="text-xs text-[#A5B8A3]">⌄</span>
+                </button>
+
+                {podeEnviarDesignacoes ? (
                   <button
                     type="button"
-                    onClick={() => setShowNewMidweekForm(!showNewMidweekForm)}
-                    className="text-[11px] bg-[#466044] hover:bg-[#537150] text-white px-3 py-2 rounded-xl font-bold cursor-pointer shrink-0"
+                    onClick={() => {
+                      setShowWeekModal(false);
+                      if (showNewMidweekForm) {
+                        setShowNewMidweekForm(false);
+                        setEditingMidweekId(null);
+                      } else {
+                        setEditingMidweekId(null);
+                        setShowNewMidweekForm(true);
+                      }
+                    }}
+                    className="text-[11px] bg-[#466044] hover:bg-[#537150] text-white px-2.5 py-1.5 rounded-xl font-bold cursor-pointer shrink-0"
                   >
                     {showNewMidweekForm ? '✕ Fechar' : '+ Semana'}
                   </button>
+                ) : (
+                  <div className="w-9" />
                 )}
               </div>
+
+              {showWeekModal && (
+                <div
+                  className="fixed inset-0 z-50 bg-black/65 flex items-center justify-center p-4"
+                  onClick={() => setShowWeekModal(false)}
+                >
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-72 max-h-[75vh] overflow-y-auto rounded-3xl bg-[#252625] border border-[#3C3E3C] p-4 shadow-2xl space-y-2"
+                  >
+                    {listaSemanasDisponiveis.map((m, idx) => {
+                      const isSelected = idx === indiceSeguro;
+                      const linhas = formatWeekTwoLines(m.weekLabel);
+                      return (
+                        <button
+                          key={`${m.id}-${idx}`}
+                          type="button"
+                          onClick={() => escolherSemanaNoModal(idx)}
+                          className={`w-full py-2.5 px-3 rounded-2xl flex items-center justify-center relative text-center transition cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#363836] text-white font-bold'
+                              : 'text-[#EAECE9] hover:bg-[#2F312F]'
+                          }`}
+                        >
+                          {isSelected && (
+                            <span className="absolute left-4 text-sm font-extrabold text-white">✓</span>
+                          )}
+                          <div className="leading-snug text-[15px]">
+                            <span className="block">{linhas.top}</span>
+                            {linhas.bottom && <span className="block">{linhas.bottom}</span>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-3 border-b border-[#2F4231] text-[11px] font-extrabold uppercase tracking-wider">
                 <button
@@ -1522,7 +2519,7 @@ export default function App() {
                   onClick={() => setScheduleSubTab('meio_de_semana')}
                   className={`py-2.5 text-center border-b-2 transition cursor-pointer ${
                     scheduleSubTab === 'meio_de_semana'
-                      ? 'border-[#C89B3C] text-white'
+                      ? 'border-[#C89B3C] text-[#C89B3C]'
                       : 'border-transparent text-[#8FA38B]'
                   }`}
                 >
@@ -1533,7 +2530,7 @@ export default function App() {
                   onClick={() => setScheduleSubTab('fim_de_semana')}
                   className={`py-2.5 text-center border-b-2 transition cursor-pointer ${
                     scheduleSubTab === 'fim_de_semana'
-                      ? 'border-[#C89B3C] text-white'
+                      ? 'border-[#C89B3C] text-[#C89B3C]'
                       : 'border-transparent text-[#8FA38B]'
                   }`}
                 >
@@ -1544,7 +2541,7 @@ export default function App() {
                   onClick={() => setScheduleSubTab('servico')}
                   className={`py-2.5 text-center border-b-2 transition cursor-pointer ${
                     scheduleSubTab === 'servico'
-                      ? 'border-[#C89B3C] text-white'
+                      ? 'border-[#C89B3C] text-[#C89B3C]'
                       : 'border-transparent text-[#8FA38B]'
                   }`}
                 >
@@ -1553,8 +2550,12 @@ export default function App() {
               </div>
 
               {showNewMidweekForm && podeEnviarDesignacoes && (
-                <form onSubmit={criarReuniaoMeioSemana} className={`rounded-2xl p-4 border space-y-2.5 text-xs ${cardStyle}`}>
-                  <h3 className="font-bold text-sm text-emerald-400">Nova Semana • Meio de Semana</h3>
+                <form onSubmit={salvarReuniaoMeioSemana} className={`rounded-2xl p-4 border space-y-2.5 text-xs ${cardStyle}`}>
+                  <h3 className="font-bold text-sm text-emerald-400">
+                    {editingMidweekId
+                      ? `Editar Partes • ${mwWeekLabel}`
+                      : `Editar / Salvar Semana • ${mwWeekLabel}`}
+                  </h3>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block mb-1 opacity-80">Intervalo da Semana:</label>
@@ -1683,20 +2684,49 @@ export default function App() {
                       <input type="text" placeholder="Leitor" value={mwLiving8Assistant} onChange={(e) => setMwLiving8Assistant(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
                     </div>
                     <input type="text" placeholder="Capítulo / referência estudo" value={mwLiving8Desc} onChange={(e) => setMwLiving8Desc(e.target.value)} className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    <input type="text" placeholder="Cântico Final" value={mwClosingSong} onChange={(e) => setMwClosingSong(e.target.value)} className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                  </div>
+
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-bold uppercase text-[#3B825B] block">Áudio/Vídeo & Indicadores</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="text" placeholder="Operador de Áudio" value={mwAudioName} onChange={(e) => setMwAudioName(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Função (ex: Áudio e Vídeo)" value={mwAudioRole} onChange={(e) => setMwAudioRole(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="text" placeholder="Microfone Volante 1" value={mwMic1Name} onChange={(e) => setMwMic1Name(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Função (ex: Palco e Microfone)" value={mwMic1Role} onChange={(e) => setMwMic1Role(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="text" placeholder="Microfone Volante 2" value={mwMic2Name} onChange={(e) => setMwMic2Name(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Função (ex: Microfone)" value={mwMic2Role} onChange={(e) => setMwMic2Role(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="text" placeholder="Indicador 1" value={mwInd1Name} onChange={(e) => setMwInd1Name(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Função (ex: Interno)" value={mwInd1Role} onChange={(e) => setMwInd1Role(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="text" placeholder="Indicador 2" value={mwInd2Name} onChange={(e) => setMwInd2Name(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                      <input type="text" placeholder="Função (ex: Externo)" value={mwInd2Role} onChange={(e) => setMwInd2Role(e.target.value)} className="p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white" />
+                    </div>
                   </div>
 
                   <button
                     type="submit"
                     className="w-full py-2.5 rounded-lg font-bold bg-emerald-700 hover:bg-emerald-600 text-white cursor-pointer"
                   >
-                    💾 Salvar Programação no PostgreSQL
+                    💾 Salvar Alterações desta Semana no PostgreSQL
                   </button>
                 </form>
               )}
 
               {scheduleSubTab === 'meio_de_semana' && (
                 <div className="space-y-4">
-                  {semanaSelecionada ? (
+                  {switchingWeek ? (
+                    <div className="py-16 flex justify-center items-center">
+                      <div className="w-6 h-6 border-2 border-[#A5B8A3] border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : semanaSelecionada ? (
                     <div className="space-y-4">
                       <div className="flex justify-between items-start gap-2">
                         <div>
@@ -1710,27 +2740,38 @@ export default function App() {
                           )}
                         </div>
                         {podeEnviarDesignacoes && (
-                          <button
-                            type="button"
-                            onClick={() => removerReuniaoMeioSemana(semanaSelecionada.id)}
-                            className="px-2 py-1 rounded bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-800/70 text-[10px] font-bold cursor-pointer"
-                          >
-                            🗑️
-                          </button>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => abrirEdicaoReuniaoMeioSemana(semanaSelecionada)}
+                              className="px-2.5 py-1 rounded bg-[#253526] hover:bg-[#314733] text-white border border-[#4A634C] text-[10px] font-bold cursor-pointer"
+                            >
+                              ✏️ Editar Partes
+                            </button>
+                            {midweekMeetings.some((m) => m.id === semanaSelecionada.id) && (
+                              <button
+                                type="button"
+                                onClick={() => removerReuniaoMeioSemana(semanaSelecionada.id)}
+                                className="px-2 py-1 rounded bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-800/70 text-[10px] font-bold cursor-pointer"
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
 
                       <div className="space-y-2.5 text-sm">
                         <div>
                           <span className="text-xs text-[#A5B8A3] block">Presidente</span>
-                          <strong className="text-white font-bold">{semanaSelecionada.chairman}</strong>
+                          <strong className="text-white font-bold text-base">{semanaSelecionada.chairman}</strong>
                         </div>
                         {parteCabecalho?.description && (
-                          <p className="text-sm font-semibold text-white">{parteCabecalho.description}</p>
+                          <p className="text-sm font-bold text-white">{parteCabecalho.description}</p>
                         )}
                         <div>
                           <span className="text-xs text-[#A5B8A3] block">Oração inicial</span>
-                          <strong className="text-white font-bold">{semanaSelecionada.openingPrayer}</strong>
+                          <strong className="text-white font-bold text-base">{semanaSelecionada.openingPrayer}</strong>
                         </div>
                       </div>
 
@@ -1740,47 +2781,95 @@ export default function App() {
                         </div>
                         {partesTesouros.map((item, idx) => (
                           <div key={`t-${idx}`} className="space-y-0.5">
-                            <p className="text-sm font-semibold text-white leading-snug">{item.title}</p>
+                            <p className="text-sm text-[#BDBFBD] leading-snug">{item.title}</p>
                             {item.description && <p className="text-xs text-[#A5B8A3]">{item.description}</p>}
-                            {item.assignee && <p className="text-sm font-extrabold text-white">{item.assignee}</p>}
-                            {item.assistant && <p className="text-sm font-semibold text-[#EAECE9]">{item.assistant}</p>}
+                            {item.assignee && <p className="text-base font-extrabold text-white">{item.assignee}</p>}
+                            {item.assistant && <p className="text-sm font-semibold text-[#BDBFBD]">{item.assistant}</p>}
                           </div>
                         ))}
                       </div>
 
                       <div className="space-y-3">
-                        <div className="bg-[#C89B3C] text-[#121A13] font-extrabold text-xs uppercase tracking-wider px-3 py-1.5">
+                        <div className="bg-[#99732C] text-white font-extrabold text-xs uppercase tracking-wider px-3 py-1.5">
                           Faça Seu Melhor no Ministério
                         </div>
                         {partesMinisterio.map((item, idx) => (
                           <div key={`m-${idx}`} className="space-y-0.5">
-                            <p className="text-sm font-semibold text-white leading-snug">{item.title}</p>
-                            {item.description && (
-                              <p className="text-xs text-[#A5B8A3] leading-relaxed">{item.description}</p>
-                            )}
-                            {item.assignee && <p className="text-sm font-extrabold text-white">{item.assignee}</p>}
-                            {item.assistant && <p className="text-sm font-semibold text-[#EAECE9]">{item.assistant}</p>}
+                            <p className="text-sm text-[#BDBFBD] leading-snug">
+                              {item.title} {item.description ? item.description : ''}
+                            </p>
+                            {item.assignee && <p className="text-base font-extrabold text-white pt-0.5">{item.assignee}</p>}
+                            {item.assistant && <p className="text-sm text-[#BDBFBD]">{item.assistant}</p>}
                           </div>
                         ))}
                       </div>
 
                       <div className="space-y-3">
-                        <div className="bg-[#9E322F] text-white font-extrabold text-xs uppercase tracking-wider px-3 py-1.5">
+                        <div className="bg-[#8F2D2B] text-white font-extrabold text-xs uppercase tracking-wider px-3 py-1.5">
                           Nossa Vida Cristã
                         </div>
-                        {partesVidaCrista.map((item, idx) => (
-                          <div key={`v-${idx}`} className="space-y-0.5">
-                            <p className="text-sm font-semibold text-white leading-snug">{item.title}</p>
-                            {item.description && <p className="text-xs text-[#A5B8A3]">{item.description}</p>}
-                            {item.assignee && <p className="text-sm font-extrabold text-white">{item.assignee}</p>}
-                            {item.assistant && <p className="text-sm font-semibold text-[#EAECE9]">{item.assistant}</p>}
-                          </div>
-                        ))}
+                        {partesVidaCrista.map((item, idx) => {
+                          const isSongOnly = !item.assignee;
+                          return (
+                            <div key={`v-${idx}`} className="space-y-0.5">
+                              <p
+                                className={
+                                  isSongOnly
+                                    ? 'text-sm font-extrabold text-white leading-snug'
+                                    : 'text-sm text-[#BDBFBD] leading-snug'
+                                }
+                              >
+                                {item.title}
+                              </p>
+                              {item.description && <p className="text-sm text-[#BDBFBD]">{item.description}</p>}
+                              {item.assignee && <p className="text-base font-extrabold text-white">{item.assignee}</p>}
+                              {item.assistant && <p className="text-sm text-[#BDBFBD]">{item.assistant}</p>}
+                            </div>
+                          );
+                        })}
                       </div>
 
-                      <div className="pt-1 text-sm">
-                        <span className="text-xs text-[#A5B8A3] block">Oração final</span>
-                        <strong className="text-white font-bold">{semanaSelecionada.closingPrayer}</strong>
+                      <div className="space-y-2.5 pt-1 text-sm">
+                        <p className="text-sm font-extrabold text-white">{canticoFinalTexto}</p>
+                        <div>
+                          <span className="text-xs text-[#A5B8A3] block">Oração final</span>
+                          <strong className="text-white font-bold text-base">{semanaSelecionada.closingPrayer}</strong>
+                        </div>
+                      </div>
+
+                      {/* Secção ÁUDIO/VÍDEO & INDICADORES igual ao final do vídeo */}
+                      <div className="space-y-3 pt-1">
+                        <div className="bg-[#3B7A57] text-white font-extrabold text-xs uppercase tracking-wider px-3 py-1.5">
+                          Áudio/Vídeo & Indicadores
+                        </div>
+                        {listaAudioIndicadores.map((item, idx) => {
+                          const [segNome, segFuncao] = (item.description || '').split('|');
+                          return (
+                            <div key={`av-${idx}`} className="space-y-0.5">
+                              <span className="text-xs text-[#A5B8A3] block">{item.title}</span>
+                              {item.assignee && (
+                                <p className="text-base text-white">
+                                  <strong className="font-extrabold">{item.assignee}</strong>{' '}
+                                  {item.assistant && (
+                                    <em className="text-sm font-normal text-[#BDBFBD] italic">
+                                      {item.assistant}
+                                    </em>
+                                  )}
+                                </p>
+                              )}
+                              {segNome && (
+                                <p className="text-base text-white">
+                                  <strong className="font-extrabold">{segNome}</strong>{' '}
+                                  {segFuncao && (
+                                    <em className="text-sm font-normal text-[#BDBFBD] italic">
+                                      {segFuncao}
+                                    </em>
+                                  )}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ) : (
@@ -1815,9 +2904,19 @@ export default function App() {
                         <input
                           type="text"
                           required
-                          placeholder="Ex: Discurso Público • Fé nas Promessas"
+                          placeholder="Ex: Discurso Público"
                           value={novoCargo}
                           onChange={(e) => setNovoCargo(e.target.value)}
+                          className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block mb-1 opacity-80">Tema do discurso:</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Como vencer o desânimo com a ajuda de Jeová"
+                          value={novoTemaDiscurso}
+                          onChange={(e) => setNovoTemaDiscurso(e.target.value)}
                           className="w-full p-2 rounded-lg bg-[#121A13] border border-[#3A523D] text-white"
                         />
                       </div>
@@ -1872,7 +2971,7 @@ export default function App() {
                     const isConfirmado = item.status === 'confirmado';
                     return (
                       <div key={item.id} className={`rounded-2xl p-4 border ${cardStyle} ${isMine ? 'ring-2 ring-[#648C61]' : ''}`}>
-                        <div className="flex justify-between items-start">
+                        <div className="flex justify-between items-start gap-2">
                           <div>
                             <h3 className="font-bold text-base">{item.cargo}</h3>
                             <p className="text-xs opacity-80">{item.data} • {item.local}</p>
@@ -1880,15 +2979,26 @@ export default function App() {
                               Designado: <strong className="text-white">{nomeResponsavel}</strong> {isMine && '(Você)'}
                             </p>
                           </div>
-                          <span
-                            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                              isConfirmado
-                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
-                                : 'bg-yellow-950 text-yellow-300 border border-yellow-700'
-                            }`}
-                          >
-                            {item.status}
-                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span
+                              className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                                isConfirmado
+                                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                                  : 'bg-yellow-950 text-yellow-300 border border-yellow-700'
+                              }`}
+                            >
+                              {item.status}
+                            </span>
+                            {podeEnviarDesignacoes && (
+                              <button
+                                type="button"
+                                onClick={() => removerEscalaNoBanco(item.id)}
+                                className="px-2 py-0.5 rounded bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-800/70 text-[10px] font-bold cursor-pointer"
+                              >
+                                🗑️ Remover
+                              </button>
+                            )}
+                          </div>
                         </div>
                         {isMine && !isConfirmado && (
                           <button
@@ -2299,7 +3409,7 @@ export default function App() {
 
         <nav className="mt-6 bg-[#1A261C] border border-[#2F4231] rounded-2xl p-2.5 flex justify-around text-xs text-[#A5B8A3]">
           <button onClick={() => setActiveTab('inicio')} className={`flex flex-col items-center px-3 py-1 rounded-xl cursor-pointer ${activeTab === 'inicio' ? 'text-white font-bold bg-[#28382A]' : ''}`}>🏠<span>Início</span></button>
-          <button onClick={() => setActiveTab('escalas')} className={`flex flex-col items-center px-3 py-1 rounded-xl cursor-pointer ${activeTab === 'escalas' ? 'text-white font-bold bg-[#28382A]' : ''}`}>📅<span>Escalas</span></button>
+          <button onClick={() => setActiveTab('escalas')} className={`flex flex-col items-center px-3 py-1 rounded-xl cursor-pointer ${activeTab === 'escalas' ? 'text-white font-bold bg-[#28382A]' : ''}`}>📅<span>Programação</span></button>
           <button onClick={() => setActiveTab('territorios')} className={`flex flex-col items-center px-3 py-1 rounded-xl cursor-pointer ${activeTab === 'territorios' ? 'text-white font-bold bg-[#28382A]' : ''}`}>🗺️<span>Territórios</span></button>
           <button onClick={() => setActiveTab('relatorios')} className={`flex flex-col items-center px-3 py-1 rounded-xl cursor-pointer ${activeTab === 'relatorios' ? 'text-white font-bold bg-[#28382A]' : ''}`}>📊<span>Relatórios</span></button>
         </nav>
