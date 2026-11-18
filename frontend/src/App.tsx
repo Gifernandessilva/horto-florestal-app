@@ -827,8 +827,17 @@ function isElderOrDev(user: MemberProfile | null) {
   return user.role === 'ANCIAO' || user.role === 'DESENVOLVEDOR' || user.role === 'ADMIN';
 }
 
-function canMemberUseTimer(user: MemberProfile | null) {
+function isPioneer(user: MemberProfile | null) {
   if (!user) return false;
+  return (
+    user.role === 'PIONEIRO_REGULAR' ||
+    user.role === 'PIONEIRO_AUXILIAR' ||
+    (user.monthlyGoal || 0) > 0
+  );
+}
+
+function canMemberUseTimer(user: MemberProfile | null) {
+  if (!user || !isPioneer(user)) return false;
   return isElderOrDev(user) || user.canUseTimer === true;
 }
 
@@ -1016,6 +1025,16 @@ export default function App() {
   const [deletePassword, setDeletePassword] = useState('');
   const [deletingMember, setDeletingMember] = useState(false);
 
+  const [participouPregacaoPorMembro, setParticipouPregacaoPorMembro] = useState<
+    Record<string, boolean>
+  >(() => {
+    try {
+      return JSON.parse(localStorage.getItem('@horto:participou_pregacao') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
   const [myServiceUnlockedIds, setMyServiceUnlockedIds] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('@horto:my_service_unlocked_ids') || '[]');
@@ -1200,13 +1219,26 @@ export default function App() {
     };
   }, [carregarDadosDoBanco]);
 
+  const ehPioneiro = isPioneer(currentUser);
+  const participouPregacao = currentUser
+    ? Boolean(participouPregacaoPorMembro[currentUser.id])
+    : false;
   const podeAtivarCronometro = canMemberUseTimer(currentUser);
   const podeVerTodasHoras = Boolean(currentUser && (currentUser.canViewAllHours || isElderOrDev(currentUser)));
   const podeEnviarDesignacoes = Boolean(currentUser && (currentUser.canAssignParts || isElderOrDev(currentUser)));
   const podeGerirPermissoes = isElderOrDev(currentUser);
   const podeVerMyService = Boolean(
-    currentUser && (isElderOrDev(currentUser) || myServiceUnlockedIds.includes(currentUser.id))
+    ehPioneiro && currentUser && (isElderOrDev(currentUser) || myServiceUnlockedIds.includes(currentUser.id))
   );
+
+  const alternarParticipacaoPregacao = (valor: boolean) => {
+    if (!currentUser) return;
+    setParticipouPregacaoPorMembro((prev) => {
+      const atualizado = { ...prev, [currentUser.id]: valor };
+      localStorage.setItem('@horto:participou_pregacao', JSON.stringify(atualizado));
+      return atualizado;
+    });
+  };
 
   const alternarMyServiceMembro = (memberId: string) => {
     if (!podeGerirPermissoes) return;
@@ -1779,6 +1811,12 @@ export default function App() {
 
   const enviarRelatorioMensalNoBanco = async (horasTotais: number) => {
     if (!currentUser) return;
+    const obsFinal =
+      observacoesRelatorio.trim() ||
+      (!ehPioneiro
+        ? `Participou da pregação: ${participouPregacao ? 'Sim' : 'Não'}`
+        : '');
+
     try {
       const res = await fetch(`${API_URL}/reports/submit`, {
         method: 'POST',
@@ -1786,10 +1824,10 @@ export default function App() {
         body: JSON.stringify({
           memberId: currentUser.id,
           monthYear: MES_ATUAL,
-          totalHours: horasTotais,
+          totalHours: ehPioneiro ? horasTotais : 0,
           revisitas,
           estudos,
-          observacoes: observacoesRelatorio,
+          observacoes: obsFinal,
         }),
       });
 
@@ -2027,7 +2065,6 @@ export default function App() {
 
   const meuRelatorioMes = (currentUser.monthlyReports || []).find((r) => r.monthYear === MES_ATUAL);
 
-  // Mantém a ordem das 8 semanas padrão do Hourglass, substituindo pelos dados do banco quando a mesma semana já tiver sido salva/editada no PostgreSQL, e adiciona novas semanas extras criadas no banco.
   const listaSemanasDisponiveis = (() => {
     const porChaveBanco = new Map<string, MidweekMeetingItem>();
     midweekMeetings.forEach((m) => {
@@ -2072,7 +2109,6 @@ export default function App() {
     (p) => p.section === 'ÁUDIO/VÍDEO & INDICADORES'
   );
 
-  // Se a semana no banco não tinha a secção de Áudio/Vídeo & Indicadores, usa os valores padrão para exibir igual ao vídeo
   const listaAudioIndicadores: MidweekPart[] =
     partesAudioIndicadores.length > 0
       ? partesAudioIndicadores
@@ -2162,7 +2198,6 @@ export default function App() {
 
           {activeTab === 'inicio' && (
             <div className="space-y-3.5">
-              {/* Cartão de Programação igual ao topo do Hourglass no vídeo */}
               <div className="flex items-center justify-between py-2 px-1">
                 <div>
                   <span className="text-xs text-[#A5B8A3] block">Programação</span>
@@ -2182,214 +2217,253 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="flex items-center justify-between px-1">
-                <div>
-                  <span className="text-[10px] uppercase tracking-widest text-[#8FA38B] font-bold block">
-                    Novembro 2026 • Hourglass
-                  </span>
-                  <span className="text-xs font-semibold text-white">
-                    {podeAtivarCronometro
-                      ? isElderOrDev(currentUser)
-                        ? 'Cronômetro Liberado (Ancião / Dev)'
-                        : 'Cronômetro Liberado pelo Ancião/Dev'
-                      : 'Bloqueado (Requer liberação de Ancião/Dev)'}
-                  </span>
-                </div>
-                <span
-                  className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${
-                    podeAtivarCronometro
-                      ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700'
-                      : 'bg-amber-950/70 text-amber-300 border-amber-700'
-                  }`}
-                >
-                  {podeAtivarCronometro ? '🔓 Liberado' : '🔒 Bloqueado'}
-                </span>
-              </div>
-
-              <div className={`rounded-3xl p-6 text-center shadow-xl border ${cardStyle}`}>
-                <div
-                  className={`w-48 h-48 mx-auto rounded-full border-[10px] flex flex-col items-center justify-center mb-5 transition ${
-                    podeAtivarCronometro
-                      ? isRunning
-                        ? 'border-emerald-500 shadow-[0_0_24px_rgba(34,197,94,0.22)]'
-                        : 'border-[#4A6B4D]'
-                      : 'border-[#39473A] opacity-85'
-                  }`}
-                >
-                  <span className="text-[10px] uppercase tracking-widest opacity-70 mb-1">
-                    {isRunning ? 'Em andamento' : podeAtivarCronometro ? 'Pronto para iniciar' : 'Bloqueado'}
-                  </span>
-                  <span className="text-4xl font-mono font-extrabold tracking-tight">
-                    {formatTime(elapsedSeconds)}
-                  </span>
-                  <span className="text-[11px] text-[#8FA38B] font-semibold mt-1.5">
-                    Mês: {horasSalvas}h
-                  </span>
-                </div>
-
-                {podeAtivarCronometro ? (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        onClick={alternarCronometro}
-                        className="py-3 px-4 rounded-xl font-bold uppercase text-xs tracking-wider bg-[#466044] hover:bg-[#537150] text-white cursor-pointer"
-                      >
-                        {isRunning ? '⏸ Pausar' : '▶ Iniciar'}
-                      </button>
-                      <button
-                        onClick={finalizarSessao}
-                        disabled={elapsedSeconds === 0}
-                        className="py-3 px-4 rounded-xl font-bold uppercase text-xs tracking-wider bg-[#EAECE9] text-[#1A261C] disabled:opacity-40 cursor-pointer"
-                      >
-                        ⏹ Salvar
-                      </button>
-                    </div>
-                    {elapsedSeconds > 0 && (
-                      <button
-                        type="button"
-                        onClick={zerarCronometroAtual}
-                        className="w-full py-2 rounded-xl font-semibold text-xs bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-800/70 cursor-pointer"
-                      >
-                        ↺ Zerar Tempo do Relógio
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="rounded-2xl p-3.5 bg-[#121A13]/60 border border-[#2F4231] text-left">
-                    <p className="text-xs font-bold text-amber-300">
-                      🔒 Cronômetro bloqueado para este membro
-                    </p>
-                    <p className="text-[11px] opacity-80 mt-0.5">
-                      Um Ancião ou Desenvolvedor pode liberar o cronômetro na aba Relatórios. Você ainda pode acompanhar suas revisitas, estudos e escalas.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-3 gap-2.5 text-center">
-                <div className={`rounded-2xl p-3 border ${cardStyle}`}>
-                  <span className="text-[10px] uppercase opacity-70 block">Horas Mês</span>
-                  <strong className="text-base font-extrabold">{horasSalvas}h</strong>
-                </div>
-                <div className={`rounded-2xl p-3 border ${cardStyle}`}>
-                  <span className="text-[10px] uppercase opacity-70 block">Revisitas</span>
-                  <strong className="text-base font-extrabold">{revisitas}</strong>
-                </div>
-                <div className={`rounded-2xl p-3 border ${cardStyle}`}>
-                  <span className="text-[10px] uppercase opacity-70 block">Estudos</span>
-                  <strong className="text-base font-extrabold">{estudos}</strong>
-                </div>
-              </div>
-
-              {podeVerMyService ? (
-                <div className={`rounded-2xl p-4 border space-y-3 ${cardStyle}`}>
-                  <div className="flex justify-between items-center">
+              {ehPioneiro ? (
+                <>
+                  <div className="flex items-center justify-between px-1">
                     <div>
-                      <span className="text-[10px] uppercase tracking-widest text-emerald-400 font-extrabold block">
-                        My Service • Metas e Calendário
+                      <span className="text-[10px] uppercase tracking-widest text-[#8FA38B] font-bold block">
+                        Novembro 2026 • Hourglass
                       </span>
-                      <strong className="text-xs">
-                        {currentUser.role.replace('_', ' ')} • Meta Mensal {metaMensal}h / Anual {metaAnual}h
-                      </strong>
+                      <span className="text-xs font-semibold text-white">
+                        {podeAtivarCronometro
+                          ? isElderOrDev(currentUser)
+                            ? 'Cronômetro Liberado (Ancião / Dev)'
+                            : 'Cronômetro Liberado pelo Ancião/Dev'
+                          : 'Bloqueado (Requer liberação de Ancião/Dev)'}
+                      </span>
                     </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 font-bold">
-                      {progressoPercentual}%
+                    <span
+                      className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${
+                        podeAtivarCronometro
+                          ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700'
+                          : 'bg-amber-950/70 text-amber-300 border-amber-700'
+                      }`}
+                    >
+                      {podeAtivarCronometro ? '🔓 Liberado' : '🔒 Bloqueado'}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2.5 rounded-xl bg-[#121A13]/50 border border-[#2F4231]">
-                      <span className="text-[10px] opacity-75 block">Faltam no Mês</span>
-                      <strong className="text-sm text-amber-300">{faltamNoMes}h</strong>
-                      <span className="text-[10px] opacity-70 block">Feitas: {horasSalvas}h / {metaMensal}h</span>
+                  <div className={`rounded-3xl p-6 text-center shadow-xl border ${cardStyle}`}>
+                    <div
+                      className={`w-48 h-48 mx-auto rounded-full border-[10px] flex flex-col items-center justify-center mb-5 transition ${
+                        podeAtivarCronometro
+                          ? isRunning
+                            ? 'border-emerald-500 shadow-[0_0_24px_rgba(34,197,94,0.22)]'
+                            : 'border-[#4A6B4D]'
+                          : 'border-[#39473A] opacity-85'
+                      }`}
+                    >
+                      <span className="text-[10px] uppercase tracking-widest opacity-70 mb-1">
+                        {isRunning ? 'Em andamento' : podeAtivarCronometro ? 'Pronto para iniciar' : 'Bloqueado'}
+                      </span>
+                      <span className="text-4xl font-mono font-extrabold tracking-tight">
+                        {formatTime(elapsedSeconds)}
+                      </span>
+                      <span className="text-[11px] text-[#8FA38B] font-semibold mt-1.5">
+                        Mês: {horasSalvas}h
+                      </span>
                     </div>
-                    <div className="p-2.5 rounded-xl bg-[#121A13]/50 border border-[#2F4231]">
-                      <span className="text-[10px] opacity-75 block">Faltam no Ano</span>
-                      <strong className="text-sm text-emerald-300">{faltamNoAno}h</strong>
-                      <span className="text-[10px] opacity-70 block">Feitas: {horasAnoAcumuladas}h / {metaAnual}h</span>
-                    </div>
-                  </div>
 
-                  <div>
-                    <div className="flex justify-between items-center text-[11px] mb-2">
-                      <span className="font-bold">Calendário • Novembro 2026</span>
-                      <span className="text-[#8FA38B]">Dia {diaSelecionadoCalendario}/11</span>
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
-                      {Array.from({ length: DIAS_NOVEMBRO }, (_, idx) => {
-                        const dia = idx + 1;
-                        const infoDia = resumoPorDia[dia];
-                        const temHoras = infoDia.horas > 0;
-                        const selecionado = diaSelecionadoCalendario === dia;
-                        return (
+                    {podeAtivarCronometro ? (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-3">
                           <button
-                            key={dia}
-                            onClick={() => setDiaSelecionadoCalendario(dia)}
-                            className={`py-1 px-0.5 rounded-lg font-semibold transition cursor-pointer flex flex-col items-center leading-tight ${
-                              selecionado
-                                ? 'bg-[#466044] text-white ring-1 ring-emerald-300'
-                                : temHoras
-                                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/60'
-                                : 'bg-[#121A13]/40 text-[#A5B8A3] hover:bg-[#233325]'
-                            }`}
+                            onClick={alternarCronometro}
+                            className="py-3 px-4 rounded-xl font-bold uppercase text-xs tracking-wider bg-[#466044] hover:bg-[#537150] text-white cursor-pointer"
                           >
-                            <span>{dia}</span>
-                            <span className="text-[9px] opacity-90">
-                              {temHoras ? `${infoDia.horas}h` : '-'}
-                            </span>
+                            {isRunning ? '⏸ Pausar' : '▶ Iniciar'}
                           </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="text-[11px] opacity-90 mt-2 bg-[#121A13]/50 border border-[#2F4231] px-3 py-2 rounded-xl flex justify-between items-center gap-2">
-                      <div>
-                        <strong className="block text-white">
-                          Dia {diaSelecionadoCalendario}/11 • {infoDiaSelecionado.horas}h marcadas
-                        </strong>
-                        <span className="text-[10px] opacity-75">
-                          Toque para ajustar ou remover as horas deste dia
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        {infoDiaSelecionado.horas > 0 && (
+                          <button
+                            onClick={finalizarSessao}
+                            disabled={elapsedSeconds === 0}
+                            className="py-3 px-4 rounded-xl font-bold uppercase text-xs tracking-wider bg-[#EAECE9] text-[#1A261C] disabled:opacity-40 cursor-pointer"
+                          >
+                            ⏹ Salvar
+                          </button>
+                        </div>
+                        {elapsedSeconds > 0 && (
                           <button
                             type="button"
-                            onClick={() => removerHorasDoDiaNoCalendario(diaSelecionadoCalendario)}
-                            className="px-2 py-1 rounded-lg bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-800/70 text-[10px] font-bold cursor-pointer"
+                            onClick={zerarCronometroAtual}
+                            className="w-full py-2 rounded-xl font-semibold text-xs bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-800/70 cursor-pointer"
                           >
-                            ✕ Remover dia
+                            ↺ Zerar Tempo do Relógio
                           </button>
                         )}
-                        <span className="text-xs font-extrabold text-emerald-300">
-                          {infoDiaSelecionado.horas}h
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl p-3.5 bg-[#121A13]/60 border border-[#2F4231] text-left">
+                        <p className="text-xs font-bold text-amber-300">
+                          🔒 Cronômetro bloqueado para este membro
+                        </p>
+                        <p className="text-[11px] opacity-80 mt-0.5">
+                          Um Ancião ou Desenvolvedor pode liberar o cronômetro na aba Relatórios.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2.5 text-center">
+                    <div className={`rounded-2xl p-3 border ${cardStyle}`}>
+                      <span className="text-[10px] uppercase opacity-70 block">Horas Mês</span>
+                      <strong className="text-base font-extrabold">{horasSalvas}h</strong>
+                    </div>
+                    <div className={`rounded-2xl p-3 border ${cardStyle}`}>
+                      <span className="text-[10px] uppercase opacity-70 block">Revisitas</span>
+                      <strong className="text-base font-extrabold">{revisitas}</strong>
+                    </div>
+                    <div className={`rounded-2xl p-3 border ${cardStyle}`}>
+                      <span className="text-[10px] uppercase opacity-70 block">Estudos</span>
+                      <strong className="text-base font-extrabold">{estudos}</strong>
+                    </div>
+                  </div>
+
+                  {podeVerMyService && (
+                    <div className={`rounded-2xl p-4 border space-y-3 ${cardStyle}`}>
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="text-[10px] uppercase tracking-widest text-emerald-400 font-extrabold block">
+                            My Service • Metas e Calendário
+                          </span>
+                          <strong className="text-xs">
+                            {currentUser.role.replace('_', ' ')} • Meta Mensal {metaMensal}h / Anual {metaAnual}h
+                          </strong>
+                        </div>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 font-bold">
+                          {progressoPercentual}%
                         </span>
                       </div>
-                    </div>
 
-                    <form onSubmit={aplicarHorasDigitadasNoDia} className="mt-2.5 flex gap-1.5">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder={`Horas no dia ${diaSelecionadoCalendario}/11 (ex: 1 ou 1.5)`}
-                        value={horasDiaInput}
-                        onChange={(e) => setHorasDiaInput(e.target.value)}
-                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#121A13] border border-[#3A523D] text-white text-xs"
-                      />
-                      <button
-                        type="submit"
-                        className="px-3 py-1.5 rounded-lg bg-[#466044] hover:bg-[#537150] text-white text-xs font-bold cursor-pointer"
-                      >
-                        Salvar dia
-                      </button>
-                    </form>
-                  </div>
-                </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="p-2.5 rounded-xl bg-[#121A13]/50 border border-[#2F4231]">
+                          <span className="text-[10px] opacity-75 block">Faltam no Mês</span>
+                          <strong className="text-sm text-amber-300">{faltamNoMes}h</strong>
+                          <span className="text-[10px] opacity-70 block">Feitas: {horasSalvas}h / {metaMensal}h</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-[#121A13]/50 border border-[#2F4231]">
+                          <span className="text-[10px] opacity-75 block">Faltam no Ano</span>
+                          <strong className="text-sm text-emerald-300">{faltamNoAno}h</strong>
+                          <span className="text-[10px] opacity-70 block">Feitas: {horasAnoAcumuladas}h / {metaAnual}h</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center text-[11px] mb-2">
+                          <span className="font-bold">Calendário • Novembro 2026</span>
+                          <span className="text-[#8FA38B]">Dia {diaSelecionadoCalendario}/11</span>
+                        </div>
+
+                        <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
+                          {Array.from({ length: DIAS_NOVEMBRO }, (_, idx) => {
+                            const dia = idx + 1;
+                            const infoDia = resumoPorDia[dia];
+                            const temHoras = infoDia.horas > 0;
+                            const selecionado = diaSelecionadoCalendario === dia;
+                            return (
+                              <button
+                                key={dia}
+                                onClick={() => setDiaSelecionadoCalendario(dia)}
+                                className={`py-1 px-0.5 rounded-lg font-semibold transition cursor-pointer flex flex-col items-center leading-tight ${
+                                  selecionado
+                                    ? 'bg-[#466044] text-white ring-1 ring-emerald-300'
+                                    : temHoras
+                                    ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/60'
+                                    : 'bg-[#121A13]/40 text-[#A5B8A3] hover:bg-[#233325]'
+                                }`}
+                              >
+                                <span>{dia}</span>
+                                <span className="text-[9px] opacity-90">
+                                  {temHoras ? `${infoDia.horas}h` : '-'}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div className="text-[11px] opacity-90 mt-2 bg-[#121A13]/50 border border-[#2F4231] px-3 py-2 rounded-xl flex justify-between items-center gap-2">
+                          <div>
+                            <strong className="block text-white">
+                              Dia {diaSelecionadoCalendario}/11 • {infoDiaSelecionado.horas}h marcadas
+                            </strong>
+                            <span className="text-[10px] opacity-75">
+                              Toque para ajustar ou remover as horas deste dia
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {infoDiaSelecionado.horas > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => removerHorasDoDiaNoCalendario(diaSelecionadoCalendario)}
+                                className="px-2 py-1 rounded-lg bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-800/70 text-[10px] font-bold cursor-pointer"
+                              >
+                                ✕ Remover dia
+                              </button>
+                            )}
+                            <span className="text-xs font-extrabold text-emerald-300">
+                              {infoDiaSelecionado.horas}h
+                            </span>
+                          </div>
+                        </div>
+
+                        <form onSubmit={aplicarHorasDigitadasNoDia} className="mt-2.5 flex gap-1.5">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder={`Horas no dia ${diaSelecionadoCalendario}/11 (ex: 1 ou 1.5)`}
+                            value={horasDiaInput}
+                            onChange={(e) => setHorasDiaInput(e.target.value)}
+                            className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#121A13] border border-[#3A523D] text-white text-xs"
+                          />
+                          <button
+                            type="submit"
+                            className="px-3 py-1.5 rounded-lg bg-[#466044] hover:bg-[#537150] text-white text-xs font-bold cursor-pointer"
+                          >
+                            Salvar dia
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
-                <div className={`rounded-2xl p-3.5 border text-xs opacity-80 ${cardStyle}`}>
-                  🔒 A visão de calendário e horas restantes (estilo My Service) é liberada por Anciãos ou Desenvolvedores.
+                <div className={`rounded-2xl p-4 border space-y-3 ${cardStyle}`}>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold">Participou da pregação no mês?</span>
+                    <span
+                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                        participouPregacao
+                          ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                          : 'bg-[#233325] text-[#A5B8A3] border-[#3A523D]'
+                      }`}
+                    >
+                      {participouPregacao ? '✓ Sim' : 'Não'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => alternarParticipacaoPregacao(true)}
+                      className={`py-2.5 rounded-xl font-bold text-xs cursor-pointer border ${
+                        participouPregacao
+                          ? 'bg-[#466044] text-white border-emerald-400'
+                          : 'bg-[#121A13]/60 text-[#A5B8A3] border-[#2F4231]'
+                      }`}
+                    >
+                      ✓ Sim
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => alternarParticipacaoPregacao(false)}
+                      className={`py-2.5 rounded-xl font-bold text-xs cursor-pointer border ${
+                        !participouPregacao
+                          ? 'bg-[#2E3E30] text-white border-[#648C61]'
+                          : 'bg-[#121A13]/60 text-[#A5B8A3] border-[#2F4231]'
+                      }`}
+                    >
+                      ✕ Não
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -2435,7 +2509,6 @@ export default function App() {
 
           {activeTab === 'escalas' && (
             <div className="relative space-y-4">
-              {/* Topo idêntico ao vídeo: botão voltar <, seletor da semana centralizado e botão + Semana */}
               <div className="flex items-center justify-between gap-2">
                 <button
                   type="button"
@@ -2837,7 +2910,6 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Secção ÁUDIO/VÍDEO & INDICADORES igual ao final do vídeo */}
                       <div className="space-y-3 pt-1">
                         <div className="bg-[#3B7A57] text-white font-extrabold text-xs uppercase tracking-wider px-3 py-1.5">
                           Áudio/Vídeo & Indicadores
@@ -3210,20 +3282,65 @@ export default function App() {
               </div>
 
               <div className={`rounded-2xl p-4 border mb-4 ${cardStyle}`}>
-                <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                  <div className="p-2 rounded-xl bg-[#121A13]/40">
-                    <span className="text-xs opacity-75 block">Horas</span>
-                    <strong className="text-lg">{horasSalvas}h</strong>
+                {ehPioneiro ? (
+                  <div className="grid grid-cols-3 gap-2 text-center mb-3">
+                    <div className="p-2 rounded-xl bg-[#121A13]/40">
+                      <span className="text-xs opacity-75 block">Horas</span>
+                      <strong className="text-lg">{horasSalvas}h</strong>
+                    </div>
+                    <div className="p-2 rounded-xl bg-[#121A13]/40">
+                      <span className="text-xs opacity-75 block">Revisitas</span>
+                      <strong className="text-lg">{revisitas}</strong>
+                    </div>
+                    <div className="p-2 rounded-xl bg-[#121A13]/40">
+                      <span className="text-xs opacity-75 block">Estudos</span>
+                      <strong className="text-lg">{estudos}</strong>
+                    </div>
                   </div>
-                  <div className="p-2 rounded-xl bg-[#121A13]/40">
-                    <span className="text-xs opacity-75 block">Revisitas</span>
-                    <strong className="text-lg">{revisitas}</strong>
+                ) : (
+                  <div className="space-y-3 mb-3">
+                    <div className="p-3 rounded-xl bg-[#121A13]/40 border border-[#2F4231]">
+                      <span className="text-xs opacity-80 block mb-2 font-semibold">
+                        Participou da pregação?
+                      </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => alternarParticipacaoPregacao(true)}
+                          className={`py-2 rounded-lg font-bold text-xs cursor-pointer border ${
+                            participouPregacao
+                              ? 'bg-[#466044] text-white border-emerald-400'
+                              : 'bg-[#121A13]/60 text-[#A5B8A3] border-[#2F4231]'
+                          }`}
+                        >
+                          ✓ Sim
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => alternarParticipacaoPregacao(false)}
+                          className={`py-2 rounded-lg font-bold text-xs cursor-pointer border ${
+                            !participouPregacao
+                              ? 'bg-[#2E3E30] text-white border-[#648C61]'
+                              : 'bg-[#121A13]/60 text-[#A5B8A3] border-[#2F4231]'
+                          }`}
+                        >
+                          ✕ Não
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-center">
+                      <div className="p-2 rounded-xl bg-[#121A13]/40">
+                        <span className="text-xs opacity-75 block">Revisitas</span>
+                        <strong className="text-lg">{revisitas}</strong>
+                      </div>
+                      <div className="p-2 rounded-xl bg-[#121A13]/40">
+                        <span className="text-xs opacity-75 block">Estudos</span>
+                        <strong className="text-lg">{estudos}</strong>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-2 rounded-xl bg-[#121A13]/40">
-                    <span className="text-xs opacity-75 block">Estudos</span>
-                    <strong className="text-lg">{estudos}</strong>
-                  </div>
-                </div>
+                )}
 
                 <input
                   type="text"
@@ -3250,6 +3367,7 @@ export default function App() {
                   </h3>
                   <div className="space-y-2 text-xs">
                     {members.map((m) => {
+                      const membroPioneiro = isPioneer(m);
                       const relatorioEntregue = (m.monthlyReports || []).find((r) => r.monthYear === MES_ATUAL);
                       const segMembro = (m.timeLogs || []).reduce((acc, l) => acc + l.durationSec, 0);
                       const horasMembro = relatorioEntregue
@@ -3265,12 +3383,17 @@ export default function App() {
                             <div>
                               <strong>{m.name}</strong>
                               <span className="block text-[10px] opacity-75">
-                                {m.role.replace('_', ' ')} • Total: <strong>{horasMembro}h</strong>
+                                {m.role.replace('_', ' ')}
+                                {membroPioneiro && (
+                                  <>
+                                    {' '}• Total: <strong>{horasMembro}h</strong>
+                                  </>
+                                )}
                               </span>
                             </div>
                             {relatorioEntregue ? (
                               <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 text-[10px] font-bold">
-                                ✅ {relatorioEntregue.totalHours}h • {relatorioEntregue.estudos} est.
+                                ✅ {membroPioneiro ? `${relatorioEntregue.totalHours}h • ` : ''}{relatorioEntregue.estudos} est.
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded bg-yellow-950/70 text-yellow-300 border border-yellow-800 text-[10px]">
@@ -3282,27 +3405,31 @@ export default function App() {
                           {podeGerirPermissoes && m.id !== currentUser.id && (
                             <>
                               <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[#2F4231]">
-                                <button
-                                  onClick={() => alternarPermissaoMembro(m, 'canUseTimer')}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
-                                    timerLiberado
-                                      ? 'bg-emerald-900/70 text-emerald-200'
-                                      : 'bg-red-950/80 text-red-300'
-                                  }`}
-                                >
-                                  {timerLiberado ? '⏱️ Cronômetro Liberado' : '🔒 Liberar Cronômetro'}
-                                </button>
+                                {membroPioneiro && (
+                                  <>
+                                    <button
+                                      onClick={() => alternarPermissaoMembro(m, 'canUseTimer')}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
+                                        timerLiberado
+                                          ? 'bg-emerald-900/70 text-emerald-200'
+                                          : 'bg-red-950/80 text-red-300'
+                                      }`}
+                                    >
+                                      {timerLiberado ? '⏱️ Cronômetro Liberado' : '🔒 Liberar Cronômetro'}
+                                    </button>
 
-                                <button
-                                  onClick={() => alternarMyServiceMembro(m.id)}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
-                                    myServiceLiberado
-                                      ? 'bg-emerald-900/70 text-emerald-200'
-                                      : 'bg-[#233325] text-[#A5B8A3]'
-                                  }`}
-                                >
-                                  {myServiceLiberado ? '📅 My Service Liberado' : '🔒 Liberar My Service'}
-                                </button>
+                                    <button
+                                      onClick={() => alternarMyServiceMembro(m.id)}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
+                                        myServiceLiberado
+                                          ? 'bg-emerald-900/70 text-emerald-200'
+                                          : 'bg-[#233325] text-[#A5B8A3]'
+                                      }`}
+                                    >
+                                      {myServiceLiberado ? '📅 My Service Liberado' : '🔒 Liberar My Service'}
+                                    </button>
+                                  </>
+                                )}
 
                                 <button
                                   onClick={() => alternarPermissaoMembro(m, 'canViewAllHours')}
@@ -3378,31 +3505,35 @@ export default function App() {
                 </div>
               )}
 
-              <h3 className="text-xs uppercase tracking-widest text-[#8FA38B] mb-2 font-bold">
-                Sessões Gravadas no PostgreSQL ({logsDoBanco.length})
-              </h3>
-              <div className="space-y-2">
-                {logsDoBanco.map((s) => (
-                  <div key={s.id} className={`rounded-xl p-3 border flex justify-between items-center gap-2 text-xs ${cardStyle}`}>
-                    <div>
-                      <strong className="block">{s.date}</strong>
-                      <span className="opacity-75">Duração: {formatTime(s.durationSec)}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 text-[10px]">
-                        🗄️ Salvo no Neon DB
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removerSessaoGravada(s.id)}
-                        className="px-2 py-0.5 rounded bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-800/70 text-[10px] font-bold cursor-pointer"
-                      >
-                        🗑️ Remover
-                      </button>
-                    </div>
+              {ehPioneiro && (
+                <>
+                  <h3 className="text-xs uppercase tracking-widest text-[#8FA38B] mb-2 font-bold">
+                    Sessões Gravadas no PostgreSQL ({logsDoBanco.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {logsDoBanco.map((s) => (
+                      <div key={s.id} className={`rounded-xl p-3 border flex justify-between items-center gap-2 text-xs ${cardStyle}`}>
+                        <div>
+                          <strong className="block">{s.date}</strong>
+                          <span className="opacity-75">Duração: {formatTime(s.durationSec)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 text-[10px]">
+                            🗄️ Salvo no Neon DB
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removerSessaoGravada(s.id)}
+                            className="px-2 py-0.5 rounded bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-800/70 text-[10px] font-bold cursor-pointer"
+                          >
+                            🗑️ Remover
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              )}
             </div>
           )}
         </div>
